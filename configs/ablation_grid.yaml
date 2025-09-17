@@ -1,0 +1,9 @@
+grid:
+  MODEL.arch: ["skipgram", "cbow"]
+  MODEL.loss: ["hs", "ns"]
+  MODEL.dim: [100, 300, 600]
+  MODEL.window: [5, 10]
+  TRAIN.epochs: [5, 10]
+  DATA.subsample_t: [null, 1e-5]
+base_cfg: configs/base.yaml
+out_root: runs/ablations

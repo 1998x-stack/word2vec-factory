@@ -1,0 +1,11 @@
+INCLUDE: configs/base.yaml
+DATA:
+  subsample_t: null
+MODEL:
+  arch: skipgram
+  loss: hs
+  window: 10
+  dim: 300
+TRAIN:
+  epochs: 10
+  lr: 0.025

@@ -1,0 +1,10 @@
+INCLUDE: configs/base.yaml
+MODEL:
+  arch: skipgram
+  loss: ns
+  ns_neg_k: 10
+  dim: 300
+  window: 10
+TRAIN:
+  epochs: 10
+  lr: 0.025

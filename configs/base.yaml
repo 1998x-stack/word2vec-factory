@@ -1,0 +1,37 @@
+SEED: 42
+RUN:
+  out_dir: runs/exp1
+  save_every_steps: 5000
+  tb: true
+
+DATA:
+  input_files:
+    - ./sample_corpus.txt
+  lowercase: true
+  min_count: 5
+  max_vocab: 1000000
+  subsample_t: 1e-5              # set null to disable
+  tokenizer: simple              # simple | whitespace
+  max_sent_len: 10000            # ✅ moved here
+
+TRAIN:
+  epochs: 10
+  batch_size: 1024
+  num_workers: 0
+  lr: 0.025
+  lr_schedule: linear            # linear | none
+  optimizer: sgd                 # sgd | adam
+  device: auto
+
+MODEL:
+  arch: skipgram                 # skipgram | cbow
+  dim: 300
+  window: 5
+  ns_neg_k: 5
+  loss: ns                       # ns | hs
+  hs_use_huffman: true
+  share_input_output: false
+
+EVAL:
+  analogy_file: null
+  topk: 1
