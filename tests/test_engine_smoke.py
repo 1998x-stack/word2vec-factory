@@ -1,5 +1,6 @@
 import pytest
-from w2v_factory.config import Cfg, RunCfg, DataCfg, TrainCfg, ModelCfg, EvalCfg
+
+from w2v_factory.config import Cfg, DataCfg, EvalCfg, ModelCfg, RunCfg, TrainCfg
 from w2v_factory.trainer.engine import Trainer
 
 CORPUS = (
@@ -32,10 +33,8 @@ def test_train_smoke(tmp_path, arch, loss):
             subsample_t=None,
             max_sent_len=1000,
         ),
-        TRAIN=TrainCfg(epochs=1, batch_size=16, lr=0.01, lr_schedule="none",
-                       optimizer="sgd", device="cpu"),
-        MODEL=ModelCfg(arch=arch, dim=8, window=2, ns_neg_k=2, loss=loss,
-                       share_input_output=False),
+        TRAIN=TrainCfg(epochs=1, batch_size=16, lr=0.01, lr_schedule="none", optimizer="sgd", device="cpu"),
+        MODEL=ModelCfg(arch=arch, dim=8, window=2, ns_neg_k=2, loss=loss, share_input_output=False),
         EVAL=EvalCfg(),
     )
     Trainer(cfg).train()

@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from w2v_factory.data.subsample import _coerce_t, compute_discard_probs
 
 

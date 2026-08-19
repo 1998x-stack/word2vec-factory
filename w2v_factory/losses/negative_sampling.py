@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import Tuple
+
 import numpy as np
 import torch
+
 
 def draw_negatives(alias_sampler, B: int, K: int, forbid: torch.Tensor | None = None) -> torch.Tensor:
     """从 alias 分布采样负样本；可选避免与正样本相同（forbid 为 [B] 正样本 id）。"""

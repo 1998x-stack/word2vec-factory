@@ -1,7 +1,10 @@
 from __future__ import annotations
-from loguru import logger
+
 import sys
 from pathlib import Path
+
+from loguru import logger
+
 
 def setup_logging(out_dir: str) -> None:
     """Configure Loguru with file + stderr sinks."""

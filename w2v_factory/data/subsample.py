@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import numpy as np
-from typing import List, Optional, Union
 
-Scalar = Union[float, int, str, None]
+Scalar = float | int | str | None
 
-def _coerce_t(t: Scalar) -> Optional[float]:
+
+def _coerce_t(t: Scalar) -> float | None:
     """Coerce YAML-provided subsample_t into float or None.
 
     Accepts: None, float, int, or string like '1e-5', 'null', 'None', 'false', '0'.
@@ -23,7 +24,8 @@ def _coerce_t(t: Scalar) -> Optional[float]:
             return None
     return None
 
-def compute_discard_probs(counts: List[int], total_tokens: int, t: Scalar) -> np.ndarray:
+
+def compute_discard_probs(counts: list[int], total_tokens: int, t: Scalar) -> np.ndarray:
     """计算 高频词 的丢弃概率（次采样）。
 
     Args:

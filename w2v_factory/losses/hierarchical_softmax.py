@@ -1,9 +1,11 @@
 from __future__ import annotations
-import numpy as np
-import torch
-from typing import List, Tuple
 
-def pack_hs_batch(word_ids: torch.Tensor, paths: List[List[int]], codes: List[List[int]]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+import torch
+
+
+def pack_hs_batch(
+    word_ids: torch.Tensor, paths: list[list[int]], codes: list[list[int]]
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """把不同长度的 Huffman 路径打包为定长张量，返回 (paths_t, codes_t, lens_t)。"""
     B = len(word_ids)
     Lmax = max((len(paths[int(w.item())]) for w in word_ids), default=0)
@@ -15,6 +17,6 @@ def pack_hs_batch(word_ids: torch.Tensor, paths: List[List[int]], codes: List[Li
         c = codes[int(w.item())]
         lens_t[i] = len(p)
         if p:
-            paths_t[i, :len(p)] = torch.tensor(p, dtype=torch.long)
-            codes_t[i, :len(c)] = torch.tensor(c, dtype=torch.long)
+            paths_t[i, : len(p)] = torch.tensor(p, dtype=torch.long)
+            codes_t[i, : len(c)] = torch.tensor(c, dtype=torch.long)
     return paths_t, codes_t, lens_t

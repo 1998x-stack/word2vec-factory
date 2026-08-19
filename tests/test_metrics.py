@@ -1,16 +1,12 @@
 import numpy as np
 import pytest
-from w2v_factory.trainer.metrics import load_analogy, evaluate_analogy
+
+from w2v_factory.trainer.metrics import evaluate_analogy, load_analogy
 
 
 def test_load_analogy_skips_section_headers(tmp_path):
     f = tmp_path / "q.txt"
-    f.write_text(
-        ": capital-common-countries\n"
-        "paris france rome italy\n"
-        ": grammar-adjective\n"
-        "x y z w\n"
-    )
+    f.write_text(": capital-common-countries\n" "paris france rome italy\n" ": grammar-adjective\n" "x y z w\n")
     assert load_analogy(str(f)) == [("paris", "france", "rome", "italy"), ("x", "y", "z", "w")]
 
 

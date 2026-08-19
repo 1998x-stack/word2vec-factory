@@ -1,4 +1,5 @@
 import pytest
+
 from w2v_factory.config import load_cfg
 
 

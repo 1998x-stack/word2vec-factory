@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import Dict, List, Tuple
+
 import numpy as np
 
-def load_analogy(path: str) -> List[Tuple[str, str, str, str]]:
+
+def load_analogy(path: str) -> list[tuple[str, str, str, str]]:
     """读取 Google analogy 文件。支持": "分区标题行。"""
-    items: List[Tuple[str, str, str, str]] = []
-    with open(path, "r", encoding="utf-8") as f:
+    items: list[tuple[str, str, str, str]] = []
+    with open(path, encoding="utf-8") as f:
         for line in f:
             if not line or line.startswith(":"):
                 continue
@@ -13,8 +14,10 @@ def load_analogy(path: str) -> List[Tuple[str, str, str, str]]:
             items.append((a, b, c, d))
     return items
 
-def evaluate_analogy(emb: np.ndarray, stoi: Dict[str, int], itos: List[str],
-                     items: List[Tuple[str, str, str, str]], topk: int = 1) -> float:
+
+def evaluate_analogy(
+    emb: np.ndarray, stoi: dict[str, int], itos: list[str], items: list[tuple[str, str, str, str]], topk: int = 1
+) -> float:
     """3CosAdd 评测 top-k@1 准确率（严格匹配）。
     Note: 同论文评测一致，若目标不在词表则跳过。
     """

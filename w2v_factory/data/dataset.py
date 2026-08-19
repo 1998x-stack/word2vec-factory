@@ -1,14 +1,18 @@
 from __future__ import annotations
-from typing import List, Iterable, Tuple, Optional
+
+from collections.abc import Iterable
+
 import numpy as np
+
 
 class SentenceIndexer:
     """把分词结果转换为词 id，并进行次采样丢弃。"""
-    def __init__(self, stoi: dict[str, int], discard_probs: Optional[np.ndarray]) -> None:
+
+    def __init__(self, stoi: dict[str, int], discard_probs: np.ndarray | None) -> None:
         self.stoi = stoi
         self.discard_probs = discard_probs
 
-    def encode(self, sent: List[str]) -> List[int]:
+    def encode(self, sent: list[str]) -> list[int]:
         ids = []
         for w in sent:
             if w not in self.stoi:
@@ -21,7 +25,8 @@ class SentenceIndexer:
             ids.append(wid)
         return ids
 
-def generate_skipgram_pairs(tokens: List[int], max_window: int) -> Iterable[Tuple[int, int]]:
+
+def generate_skipgram_pairs(tokens: list[int], max_window: int) -> Iterable[tuple[int, int]]:
     """为一条句子生成 Skip-gram (center, context) 正样本对。"""
     L = len(tokens)
     for i, center in enumerate(tokens):
@@ -34,7 +39,8 @@ def generate_skipgram_pairs(tokens: List[int], max_window: int) -> Iterable[Tupl
                 continue
             yield center, tokens[j]
 
-def generate_cbow_pairs(tokens: List[int], max_window: int) -> Iterable[Tuple[List[int], int]]:
+
+def generate_cbow_pairs(tokens: list[int], max_window: int) -> Iterable[tuple[list[int], int]]:
     """为一条句子生成 CBOW (contexts..., target)。"""
     L = len(tokens)
     for i, target in enumerate(tokens):

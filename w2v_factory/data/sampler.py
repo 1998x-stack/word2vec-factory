@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import numpy as np
-from typing import List
+
 
 class AliasSampler:
     """Alias method for efficient discrete sampling."""
+
     def __init__(self, probs: np.ndarray) -> None:
         n = len(probs)
         probs = probs / probs.sum()
@@ -16,13 +18,13 @@ class AliasSampler:
             (small if qi < 1.0 else large).append(i)
         while small and large:
             s = small.pop()
-            l = large.pop()
-            self.J[s] = l
-            self.q[l] = (self.q[l] - 1.0) + self.q[s]
-            if self.q[l] < 1.0:
-                small.append(l)
+            big = large.pop()
+            self.J[s] = big
+            self.q[big] = (self.q[big] - 1.0) + self.q[s]
+            if self.q[big] < 1.0:
+                small.append(big)
             else:
-                large.append(l)
+                large.append(big)
         # remain qs are 1.0
 
     def sample(self, size: int) -> np.ndarray:
@@ -32,7 +34,8 @@ class AliasSampler:
         out = np.where(use_k, kk, self.J[kk])
         return out
 
-def build_unigram_sampler(counts: List[int], power: float = 0.75) -> AliasSampler:
+
+def build_unigram_sampler(counts: list[int], power: float = 0.75) -> AliasSampler:
     """构建 Unigram^0.75 的负采样分布。"""
     probs = np.asarray(counts, dtype=np.float64)
     probs = np.power(probs, power)

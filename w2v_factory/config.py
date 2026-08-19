@@ -14,6 +14,7 @@ class RunCfg:
     out_dir: str = "runs/exp1"
     tb: bool = True
 
+
 @dataclass
 class DataCfg:
     input_files: list[str] = field(default_factory=list)
@@ -24,6 +25,7 @@ class DataCfg:
     tokenizer: str = "simple"
     max_sent_len: int = 10_000
 
+
 @dataclass
 class TrainCfg:
     epochs: int = 10
@@ -33,18 +35,21 @@ class TrainCfg:
     optimizer: str = "sgd"
     device: str = "auto"
 
+
 @dataclass
 class ModelCfg:
     arch: str = "skipgram"  # skipgram | cbow
     dim: int = 300
     window: int = 5
     ns_neg_k: int = 5
-    loss: str = "ns"        # ns | hs
+    loss: str = "ns"  # ns | hs
     share_input_output: bool = False
+
 
 @dataclass
 class EvalCfg:
     analogy_file: str | None = None
+
 
 @dataclass
 class Cfg:
@@ -64,6 +69,7 @@ def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
             a[k] = v
     return a
 
+
 def load_cfg(path: str) -> Cfg:
     with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f)
@@ -74,13 +80,16 @@ def load_cfg(path: str) -> Cfg:
         return _from_dict(merged)
     return _from_dict(raw)
 
+
 def _to_dict(cfg: Cfg) -> dict[str, Any]:
     return dataclasses.asdict(cfg)
+
 
 def _filter_kwargs(cls, dct: dict[str, Any]) -> dict[str, Any]:
     """Strip unknown keys so configs don't crash on typos or moved fields."""
     allowed = {f.name for f in dataclasses.fields(cls)}
     return {k: v for k, v in dct.items() if k in allowed}
+
 
 def _from_dict(d: dict[str, Any]) -> Cfg:
     run = RunCfg(**_filter_kwargs(RunCfg, d.get("RUN", {})))

@@ -1,21 +1,25 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Dict, List, Iterable, Tuple
+
 from collections import Counter
+from collections.abc import Iterable
+from dataclasses import dataclass
+
 
 @dataclass
 class Vocab:
     """词表结构体。"""
-    stoi: Dict[str, int]
-    itos: List[str]
-    counts: List[int]
+
+    stoi: dict[str, int]
+    itos: list[str]
+    counts: list[int]
     total_tokens: int
 
     @property
     def size(self) -> int:
         return len(self.itos)
 
-def build_vocab(token_stream: Iterable[List[str]], min_count: int, max_vocab: int) -> Vocab:
+
+def build_vocab(token_stream: Iterable[list[str]], min_count: int, max_vocab: int) -> Vocab:
     """统计词频并截断，返回 Vocab。"""
     counter: Counter[str] = Counter()
     total = 0

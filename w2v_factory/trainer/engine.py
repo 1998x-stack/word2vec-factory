@@ -1,24 +1,26 @@
 from __future__ import annotations
-from typing import List, Tuple, Optional
+
 import os
-from loguru import logger
+
 import numpy as np
 import torch
+from loguru import logger
 from torch.utils.tensorboard import SummaryWriter
 
-from ..utils import set_seed, pick_device
-from ..data.text_reader import iter_tokens
-from ..data.vocab import build_vocab, Vocab
-from ..data.subsample import compute_discard_probs
-from ..data.dataset import SentenceIndexer, generate_skipgram_pairs, generate_cbow_pairs
+from ..data.dataset import SentenceIndexer, generate_cbow_pairs, generate_skipgram_pairs
 from ..data.huffman import build_huffman_codes
 from ..data.sampler import build_unigram_sampler
-from ..losses.negative_sampling import draw_negatives
+from ..data.subsample import compute_discard_probs
+from ..data.text_reader import iter_tokens
+from ..data.vocab import Vocab, build_vocab
 from ..losses.hierarchical_softmax import pack_hs_batch
-from ..models.skipgram import SkipGram
+from ..losses.negative_sampling import draw_negatives
 from ..models.cbow import CBOW
+from ..models.skipgram import SkipGram
+from ..trainer.exporter import save_numpy, save_word2vec_txt
 from ..trainer.lr_schedulers import get_scheduler
-from ..trainer.exporter import save_word2vec_txt, save_numpy
+from ..utils import pick_device, set_seed
+
 
 class Trainer:
     """训练引擎：包含数据预处理、采样、训练循环、评测与导出。"""
@@ -27,7 +29,7 @@ class Trainer:
         self.cfg = cfg
         self.device = pick_device(cfg.TRAIN.device)
         set_seed(cfg.SEED)
-        self.writer: Optional[SummaryWriter] = None
+        self.writer: SummaryWriter | None = None
         if cfg.RUN.tb:
             self.writer = SummaryWriter(log_dir=os.path.join(cfg.RUN.out_dir, "tb"))
 
@@ -44,14 +46,14 @@ class Trainer:
         self.indexer = SentenceIndexer(vocab.stoi, discard_probs)
 
         # Huffman/负采样构件
-        self.hs_paths: Optional[List[List[int]]] = None
-        self.hs_codes: Optional[List[List[int]]] = None
+        self.hs_paths: list[list[int]] | None = None
+        self.hs_codes: list[list[int]] | None = None
         self.neg_sampler = None
         if cfg.MODEL.loss == "hs":
             logger.info("Building Huffman tree...")
             paths, codes = build_huffman_codes(vocab.counts)
             self.hs_paths, self.hs_codes = paths, codes
-            out_nodes = 2 * vocab.size - 1   # HS 需要为内部节点留位置
+            out_nodes = 2 * vocab.size - 1  # HS 需要为内部节点留位置
         else:
             logger.info("Building unigram^0.75 sampler...")
             self.neg_sampler = build_unigram_sampler(vocab.counts)
@@ -82,12 +84,12 @@ class Trainer:
         self.total_steps = None  # 线性退火按 token 对数估计也可，这里按粗略 batch 估计
         self.sched = None
 
-    def _train_epoch_skipgram_ns(self, sents: List[List[int]], step0: int) -> int:
+    def _train_epoch_skipgram_ns(self, sents: list[list[int]], step0: int) -> int:
         B = self.cfg.TRAIN.batch_size
         K = self.cfg.MODEL.ns_neg_k
         step = step0
         # 生成所有正样本（注意：大语料下建议在线生成 + 分块；此处教学实现）
-        pos_pairs: List[Tuple[int, int]] = []
+        pos_pairs: list[tuple[int, int]] = []
         for toks in sents:
             pos_pairs.extend(generate_skipgram_pairs(toks, self.cfg.MODEL.window))
         logger.info(f"Pos pairs (epoch): {len(pos_pairs)}")
@@ -96,7 +98,7 @@ class Trainer:
         rng.shuffle(pos_pairs)
 
         for i in range(0, len(pos_pairs), B):
-            batch = pos_pairs[i:i+B]
+            batch = pos_pairs[i : i + B]
             centers = torch.tensor([c for c, _ in batch], dtype=torch.long, device=self.device)
             pos_ctx = torch.tensor([o for _, o in batch], dtype=torch.long, device=self.device)
             neg_ctx = draw_negatives(self.neg_sampler, centers.shape[0], K, forbid=pos_ctx).to(self.device)
@@ -115,20 +117,20 @@ class Trainer:
             step += 1
         return step
 
-    def _train_epoch_skipgram_hs(self, sents: List[List[int]], step0: int) -> int:
+    def _train_epoch_skipgram_hs(self, sents: list[list[int]], step0: int) -> int:
         B = self.cfg.TRAIN.batch_size
         step = step0
         paths, codes = self.hs_paths, self.hs_codes
         assert paths is not None and codes is not None
         # 准备 (center → 路径)
-        pos_words: List[int] = []
+        pos_words: list[int] = []
         for toks in sents:
             for c, _ in generate_skipgram_pairs(toks, self.cfg.MODEL.window):
                 pos_words.append(c)
         logger.info(f"Centers (epoch): {len(pos_words)}")
 
         for i in range(0, len(pos_words), B):
-            w = torch.tensor(pos_words[i:i+B], dtype=torch.long, device=self.device)
+            w = torch.tensor(pos_words[i : i + B], dtype=torch.long, device=self.device)
             p, cd, ln = pack_hs_batch(w.cpu(), paths, codes)
             p, cd, ln = p.to(self.device), cd.to(self.device), ln.to(self.device)
             out = self.model.forward_hs(w, p, cd, ln)
@@ -146,25 +148,23 @@ class Trainer:
             step += 1
         return step
 
-    def _train_epoch_cbow_ns(self, sents: List[List[int]], step0: int) -> int:
+    def _train_epoch_cbow_ns(self, sents: list[list[int]], step0: int) -> int:
         B = self.cfg.TRAIN.batch_size
         K = self.cfg.MODEL.ns_neg_k
         step = step0
-        pairs: List[Tuple[List[int], int]] = []
+        pairs: list[tuple[list[int], int]] = []
         for toks in sents:
             pairs.extend(generate_cbow_pairs(toks, self.cfg.MODEL.window))
         logger.info(f"CBOW pairs (epoch): {len(pairs)}")
 
-        # pad 到定长
-        maxL = max((len(x) for x, _ in pairs), default=0)
         for i in range(0, len(pairs), B):
-            batch = pairs[i:i+B]
+            batch = pairs[i : i + B]
             ctx_lens = [len(x) for x, _ in batch]
             Lmax = max(ctx_lens) if batch else 0
             ctx = np.zeros((len(batch), Lmax), dtype=np.int64)
             tgt = np.zeros((len(batch),), dtype=np.int64)
             for bi, (xs, y) in enumerate(batch):
-                ctx[bi, :len(xs)] = xs
+                ctx[bi, : len(xs)] = xs
                 tgt[bi] = y
             ctx_t = torch.from_numpy(ctx).to(self.device)
             lens_t = torch.tensor(ctx_lens, dtype=torch.long, device=self.device)
@@ -185,24 +185,24 @@ class Trainer:
             step += 1
         return step
 
-    def _train_epoch_cbow_hs(self, sents: List[List[int]], step0: int) -> int:
+    def _train_epoch_cbow_hs(self, sents: list[list[int]], step0: int) -> int:
         B = self.cfg.TRAIN.batch_size
         step = step0
         paths, codes = self.hs_paths, self.hs_codes
         assert paths is not None and codes is not None
-        pairs: List[Tuple[List[int], int]] = []
+        pairs: list[tuple[list[int], int]] = []
         for toks in sents:
             pairs.extend(generate_cbow_pairs(toks, self.cfg.MODEL.window))
         logger.info(f"CBOW pairs (epoch): {len(pairs)}")
 
         for i in range(0, len(pairs), B):
-            batch = pairs[i:i+B]
+            batch = pairs[i : i + B]
             ctx_lens = [len(x) for x, _ in batch]
             Lmax_ctx = max(ctx_lens) if batch else 0
             ctx = np.zeros((len(batch), Lmax_ctx), dtype=np.int64)
             tgt = np.zeros((len(batch),), dtype=np.int64)
             for bi, (xs, y) in enumerate(batch):
-                ctx[bi, :len(xs)] = xs
+                ctx[bi, : len(xs)] = xs
                 tgt[bi] = y
             ctx_t = torch.from_numpy(ctx).to(self.device)
             lens_t = torch.tensor(ctx_lens, dtype=torch.long, device=self.device)
@@ -227,15 +227,17 @@ class Trainer:
     def train(self) -> None:
         # 再次读取语料，这次进行编码+次采样
         logger.info("Encoding corpus with subsampling...")
-        sents: List[List[int]] = []
-        for toks in iter_tokens(self.cfg.DATA.input_files, self.cfg.DATA.lowercase, self.cfg.DATA.tokenizer, self.cfg.DATA.max_sent_len):
+        sents: list[list[int]] = []
+        for toks in iter_tokens(
+            self.cfg.DATA.input_files, self.cfg.DATA.lowercase, self.cfg.DATA.tokenizer, self.cfg.DATA.max_sent_len
+        ):
             ids = self.indexer.encode(toks)
             if len(ids) >= 2:
                 sents.append(ids)
 
         # 估算 total_steps 以便线性退火（粗略）：
         # 用样本数 / batch_size 近似
-        approx_pairs = sum(max(0, len(s)-1) * self.cfg.MODEL.window for s in sents)
+        approx_pairs = sum(max(0, len(s) - 1) * self.cfg.MODEL.window for s in sents)
         est_steps = int((approx_pairs / max(self.cfg.TRAIN.batch_size, 1)) * self.cfg.TRAIN.epochs)
         if self.cfg.TRAIN.lr_schedule == "linear":
             self.sched = get_scheduler(self.optim, "linear", est_steps)

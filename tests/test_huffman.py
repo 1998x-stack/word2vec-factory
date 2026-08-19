@@ -10,7 +10,7 @@ def test_inner_nodes_and_path_lengths():
     paths, codes = build_huffman_codes(counts)
     V = len(counts)
     assert len(paths) == V and len(codes) == V
-    for p, c in zip(paths, codes):
+    for p, c in zip(paths, codes, strict=True):
         assert len(p) == len(c)  # one code bit per tree edge
         assert len(p) >= 1  # every word has a non-empty path
 

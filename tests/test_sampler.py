@@ -1,4 +1,5 @@
 import numpy as np
+
 from w2v_factory.data.sampler import AliasSampler, build_unigram_sampler
 
 

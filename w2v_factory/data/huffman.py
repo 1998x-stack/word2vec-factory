@@ -1,7 +1,8 @@
 from __future__ import annotations
-from typing import List, Tuple
+
 import heapq
 from dataclasses import dataclass
+
 
 @dataclass
 class HuffmanNode:
@@ -11,7 +12,8 @@ class HuffmanNode:
     right: int = -1
     parent: int = -1
 
-def build_huffman_codes(counts: List[int]) -> Tuple[List[List[int]], List[List[int]]]:
+
+def build_huffman_codes(counts: list[int]) -> tuple[list[list[int]], list[list[int]]]:
     """构建 Huffman 树并为每个词返回 (path_nodes, path_codes)。
     Returns:
         paths: 每个词到根的节点索引列表（使用内部节点索引，从0开始编号）。
@@ -23,15 +25,15 @@ def build_huffman_codes(counts: List[int]) -> Tuple[List[List[int]], List[List[i
     vocab_size = len(counts)
     # 初始化叶子节点（词），内部节点 id 从 vocab_size 开始
     pq = []
-    nodes: List[HuffmanNode] = []
+    nodes: list[HuffmanNode] = []
     for i, c in enumerate(counts):
         heapq.heappush(pq, (c, len(nodes)))
         nodes.append(HuffmanNode(freq=c, idx=i))
 
     next_internal_id = vocab_size
     while len(pq) > 1:
-        (f1, n1_id) = heapq.heappop(pq)
-        (f2, n2_id) = heapq.heappop(pq)
+        f1, n1_id = heapq.heappop(pq)
+        f2, n2_id = heapq.heappop(pq)
         # 创建内部节点
         internal_node = HuffmanNode(freq=f1 + f2, idx=-(next_internal_id + 1), left=n1_id, right=n2_id)
         nodes.append(internal_node)
@@ -41,11 +43,9 @@ def build_huffman_codes(counts: List[int]) -> Tuple[List[List[int]], List[List[i
         heapq.heappush(pq, (internal_node.freq, parent_id))
         next_internal_id += 1
 
-    # 最后一个是根
-    root_id = pq[0][1]
     # 为每个词回溯路径与编码（左=0，右=1）
-    paths: List[List[int]] = [[] for _ in range(vocab_size)]
-    codes: List[List[int]] = [[] for _ in range(vocab_size)]
+    paths: list[list[int]] = [[] for _ in range(vocab_size)]
+    codes: list[list[int]] = [[] for _ in range(vocab_size)]
     for wid in range(vocab_size):
         path, code = [], []
         nid = wid

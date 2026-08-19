@@ -1,10 +1,14 @@
 from __future__ import annotations
-from typing import Any, Callable, Dict
+
+from collections.abc import Callable
+from typing import Any
+
 
 class Registry:
     """Simple registry enabling pluggable factories or plain callables."""
+
     def __init__(self) -> None:
-        self._objs: Dict[str, Callable[..., Any]] = {}
+        self._objs: dict[str, Callable[..., Any]] = {}
 
     def register(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
@@ -12,6 +16,7 @@ class Registry:
                 raise KeyError(f"Registry duplicate: {name}")
             self._objs[name] = fn
             return fn
+
         return deco
 
     def get(self, name: str) -> Callable[..., Any]:
@@ -25,6 +30,7 @@ class Registry:
         if kwargs:
             return obj(**kwargs)
         return obj
+
 
 # Global registries
 MODEL_REG = Registry()
