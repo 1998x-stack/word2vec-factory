@@ -36,8 +36,11 @@ class Word2VecBase(nn.Module):
         else:
             self.out_embed = nn.Embedding(out_size, dim)  # output/context or HS nodes
 
-        # 初始化（与 word2vec 类似的小范围均匀分布）
-        bound = 0.5 / dim
+        # 初始化：输入与输出嵌入都使用均匀随机分布（scale = 1/sqrt(dim)）。
+        # 注意：不要将输出嵌入初始化为 0 —— 零向量会使输入嵌入在冷启动时梯度为 0，
+        # 导致模型无法学习（实测 loss 卡死在初始值）。scale 取 1/sqrt(dim) 而非
+        # 0.5/dim，避免在高维时向量过小、梯度过小而几乎不更新。
+        bound = 1.0 / (dim**0.5)
         nn.init.uniform_(self.in_embed.weight, -bound, bound)
         if not share_io:
-            nn.init.zeros_(self.out_embed.weight)
+            nn.init.uniform_(self.out_embed.weight, -bound, bound)
