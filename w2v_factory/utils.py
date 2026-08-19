@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import random
+
 import numpy as np
 import torch
-from typing import Tuple
+
 
 def set_seed(seed: int) -> None:
     """设置全局随机种子，确保可复现。"""
@@ -14,7 +16,7 @@ def set_seed(seed: int) -> None:
 def pick_device(cfg_device: str) -> torch.device:
     """根据配置选择设备。'auto' 则优先 CUDA。"""
     if cfg_device == "auto":
-        return torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return torch.device(cfg_device)
 
 def linear_decay(it: int, total: int) -> float:

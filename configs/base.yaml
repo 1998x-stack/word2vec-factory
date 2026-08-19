@@ -1,7 +1,6 @@
 SEED: 42
 RUN:
   out_dir: runs/exp1
-  save_every_steps: 5000
   tb: true
 
 DATA:
@@ -17,7 +16,6 @@ DATA:
 TRAIN:
   epochs: 10
   batch_size: 1024
-  num_workers: 0
   lr: 0.025
   lr_schedule: linear            # linear | none
   optimizer: sgd                 # sgd | adam
@@ -29,9 +27,4 @@ MODEL:
   window: 5
   ns_neg_k: 5
   loss: ns                       # ns | hs
-  hs_use_huffman: true
   share_input_output: false
-
-EVAL:
-  analogy_file: null
-  topk: 1
