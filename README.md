@@ -10,7 +10,7 @@ industrial ablation and for learning word2vec from scratch.
 - Accurate Huffman Hierarchical Softmax.
 - Negative Sampling with unigram^0.75 alias-table sampling.
 - Subsampling of frequent words and randomized context windows (paper-style).
-- Exact-step linear LR decay, isolated deterministic RNG streams, TensorBoard, and Loguru logging.
+- Bounded-memory corpus streaming, token-progress linear LR decay, isolated deterministic RNG streams, TensorBoard, and Loguru logging.
 - Google Analogy evaluation and batch ablation sweeps.
 
 ## Installing
@@ -52,7 +52,7 @@ w2v_factory/
   data/           vocab, subsampling, tokenizers, Huffman, alias sampling
   losses/         hierarchical softmax + negative sampling packers
   models/         CBOW and Skip-gram
-  trainer/        engine, exact training planner, exporter, lr schedulers, metrics
+  trainer/        streaming engine, token-progress planner, exporter, lr schedulers, metrics
   config.py       dataclass config + YAML loader (with INCLUDE)
   registry.py     factory registry
 configs/          run and ablation YAML files
@@ -63,7 +63,8 @@ questions-words.txt Google analogy dataset
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)\n- [Deterministic training plans](docs/training-plan.md)
+- [Architecture](docs/architecture.md)
+- [Streaming training and token progress](docs/training-plan.md)
 - [Configuration reference](docs/config-reference.md)
 - [Ablations](docs/ablation.md)
 - [Evaluation](docs/evaluation.md)
@@ -72,6 +73,6 @@ questions-words.txt Google analogy dataset
 ## Run artifacts
 
 A successful training run writes `embeddings.txt`, `embeddings.npy`, and
-`run_manifest.json`. The manifest records the resolved configuration,
-per-epoch training plan, RNG stream assignments, selected device, vocabulary
-statistics, and planned/actual optimizer-step counts.
+`run_manifest.json`. The manifest records the resolved configuration, token-progress plan, RNG stream
+assignments, selected device, vocabulary statistics, per-epoch streaming
+counters, actual optimizer steps, and peak buffered examples.

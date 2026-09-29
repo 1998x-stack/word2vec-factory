@@ -6,9 +6,10 @@
 2. **Negative-sampling false negatives (fixed in this PR).** A single redraw after a positive/negative collision does not ensure the redraw differs from the positive. Batched rejection sampling now retries until every row excludes its positive. A one-word vocabulary with a forbidden positive is rejected.
 3. **HS Python-loop overhead (addressed 2026-09-29).** Skip-gram and CBOW HS now compute path scores with masked tensor operations. CBOW has a scalar-reference regression test that checks both loss and gradients.
 4. **HS output-table memory (addressed 2026-09-29).** Huffman paths now use compact internal-node IDs, so HS allocates `V-1` output vectors instead of `2V-1`.
-5. **Training-data memory (partially addressed).** The old engine allocated all epoch pairs; the revised engine produces pairs lazily in batches. The encoded corpus is still materialized in RAM, so this is not a streaming-corpus implementation.
-6. **LR step accounting (addressed 2026-09-29).** Training now builds an exact per-epoch example/optimizer-step plan and asserts actual steps match it. Linear LR decay no longer depends on an architecture-agnostic approximation.
-7. **NumPy RNG coupling (addressed 2026-09-29).** Subsampling, negative sampling, and per-epoch context windows use independent deterministic streams; extra draws in one component no longer perturb another component's training trajectory.
+5. **Training-data memory (addressed 2026-09-29).** After the vocabulary pass, every epoch rereads the corpus line-by-line. Encoded sentences and positive pairs are no longer materialized across the corpus; only the current sentence and a bounded example batch are retained.
+6. **LR progress accounting (addressed 2026-09-29).** The intermediate exact pair-step planner was replaced by source-token progress. Linear LR now has a deterministic denominator independent of randomized Skip-gram windows, subsampling outcomes, or negative-sampling retries.
+7. **NumPy RNG coupling (addressed 2026-09-29).** Subsampling, negative sampling, and per-epoch context windows use independent deterministic streams. Subsampling is recreated per epoch, so epochs no longer reuse one frozen subsampled corpus.
+8. **Corpus drift during training (addressed 2026-09-29).** Each streaming epoch recounts in-vocabulary source tokens and recomputes the vocabulary pass's SHA-256 token-stream fingerprint. This catches equal-count reordering/substitution as well as cardinality changes instead of silently training against a changed corpus/tokenizer.
 
 ## Validation gates
 
@@ -24,4 +25,4 @@
 
 Skip-gram NS previously globally shuffled the materialized epoch pairs. The bounded generator now emits pairs in corpus order with random local context windows. This reduces peak pair-list memory but changes the sample-order distribution. Do not attribute changes in final accuracy solely to the correctness fix without controlling this difference.
 
-Future work should be isolated into independently tested PRs: true streaming corpus ingestion and memory benchmarking; token-level progress accounting if streaming changes epoch cardinality; CPU/CUDA numerical reproducibility policy and experiments; checkpoint/resume. A fixed seed alone does not guarantee bit-for-bit identical results across PyTorch versions, platforms and CPU/GPU backends (see PyTorch's reproducibility notes).
+Future work should be isolated into independently tested PRs: peak-RSS benchmarking on large corpora; CPU/CUDA numerical reproducibility policy and experiments; checkpoint/resume with RNG/progress restoration; faster evaluation for large vocabularies. A fixed seed alone does not guarantee bit-for-bit identical results across PyTorch versions, platforms and CPU/GPU backends (see PyTorch's reproducibility notes).

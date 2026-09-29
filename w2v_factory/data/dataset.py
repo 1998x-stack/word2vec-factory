@@ -30,16 +30,29 @@ class SentenceIndexer:
         self.discard_probs = discard_probs
         self.rng = rng
 
-    def encode(self, sent: list[str]) -> list[int]:
-        ids = []
-        for w in sent:
-            if w not in self.stoi:
+    def encode_with_positions(self, sent: list[str]) -> tuple[list[int], list[int], int]:
+        """Encode one sentence while preserving progress in the trainable-token stream.
+
+        Positions are one-based ordinals among vocabulary-eligible source tokens.
+        A token discarded by subsampling still advances the ordinal, which lets
+        training decay LR by source-token progress without retaining the corpus.
+        """
+        ids: list[int] = []
+        positions: list[int] = []
+        eligible = 0
+        for word in sent:
+            wid = self.stoi.get(word)
+            if wid is None:
                 continue
-            wid = self.stoi[w]
-            if self.discard_probs is not None:
-                if _random(self.rng) < self.discard_probs[wid]:
-                    continue
+            eligible += 1
+            if self.discard_probs is not None and _random(self.rng) < self.discard_probs[wid]:
+                continue
             ids.append(wid)
+            positions.append(eligible)
+        return ids, positions, eligible
+
+    def encode(self, sent: list[str]) -> list[int]:
+        ids, _, _ = self.encode_with_positions(sent)
         return ids
 
 
@@ -60,20 +73,24 @@ def generate_skipgram_pairs(
             yield center, tokens[j]
 
 
-def count_skipgram_pairs(
+def generate_skipgram_pairs_with_progress(
     tokens: list[int],
+    positions: list[int],
     max_window: int,
     rng: np.random.Generator | None = None,
-) -> int:
-    """Count Skip-gram pairs using the same window draws as generation."""
+) -> Iterable[tuple[tuple[int, int], int]]:
+    """Yield Skip-gram pairs plus the center token's source progress ordinal."""
+    if len(tokens) != len(positions):
+        raise ValueError("tokens and positions must have the same length")
     length = len(tokens)
-    total = 0
-    for i in range(length):
+    for i, center in enumerate(tokens):
         win = _window(rng, max_window)
         left = max(0, i - win)
         right = min(length, i + win + 1)
-        total += right - left - 1
-    return total
+        for j in range(left, right):
+            if j == i:
+                continue
+            yield (center, tokens[j]), positions[i]
 
 
 def generate_cbow_pairs(
@@ -90,3 +107,22 @@ def generate_cbow_pairs(
         ctx = [tokens[j] for j in range(left, right) if j != i]
         if ctx:
             yield ctx, target
+
+
+def generate_cbow_pairs_with_progress(
+    tokens: list[int],
+    positions: list[int],
+    max_window: int,
+    rng: np.random.Generator | None = None,
+) -> Iterable[tuple[tuple[list[int], int], int]]:
+    """Yield CBOW examples plus the target token's source progress ordinal."""
+    if len(tokens) != len(positions):
+        raise ValueError("tokens and positions must have the same length")
+    length = len(tokens)
+    for i, target in enumerate(tokens):
+        win = _window(rng, max_window)
+        left = max(0, i - win)
+        right = min(length, i + win + 1)
+        ctx = [tokens[j] for j in range(left, right) if j != i]
+        if ctx:
+            yield (ctx, target), positions[i]

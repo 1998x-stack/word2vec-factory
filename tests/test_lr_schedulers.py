@@ -1,14 +1,29 @@
 import pytest
 import torch
 
-from w2v_factory.trainer.lr_schedulers import build_linear_warmdown, get_scheduler
+from w2v_factory.trainer.lr_schedulers import TokenProgressScheduler, get_scheduler
 
 
-def test_linear_warmdown_uses_exact_total_steps():
-    decay = build_linear_warmdown(4)
-    assert [decay(step) for step in range(6)] == pytest.approx(
-        [1.0, 0.75, 0.5, 0.25, 0.0, 0.0]
-    )
+def test_token_scheduler_uses_source_progress():
+    param = torch.nn.Parameter(torch.tensor(1.0))
+    optim = torch.optim.SGD([param], lr=0.1)
+    sched = TokenProgressScheduler(optim, total_tokens=100)
+
+    expected = [(0, 0.1), (25, 0.075), (50, 0.05), (75, 0.025), (100, 0.0)]
+    for progress, lr in expected:
+        sched.set_progress(progress)
+        assert optim.param_groups[0]["lr"] == pytest.approx(lr)
+
+
+def test_token_scheduler_rejects_backward_or_out_of_range_progress():
+    param = torch.nn.Parameter(torch.tensor(1.0))
+    optim = torch.optim.SGD([param], lr=0.1)
+    sched = TokenProgressScheduler(optim, total_tokens=10)
+    sched.set_progress(5)
+    with pytest.raises(ValueError, match="monotonic"):
+        sched.set_progress(4)
+    with pytest.raises(ValueError, match="outside"):
+        sched.set_progress(11)
 
 
 def test_scheduler_rejects_unknown_name():
@@ -18,17 +33,8 @@ def test_scheduler_rejects_unknown_name():
         get_scheduler(optim, "liner", 10)
 
 
-def test_linear_scheduler_reaches_zero_after_planned_steps():
+def test_none_scheduler_does_not_change_lr():
     param = torch.nn.Parameter(torch.tensor(1.0))
     optim = torch.optim.SGD([param], lr=0.1)
-    sched = get_scheduler(optim, "linear", 4)
-    assert sched is not None
-
-    used_lrs = []
-    for _ in range(4):
-        used_lrs.append(optim.param_groups[0]["lr"])
-        optim.step()
-        sched.step()
-
-    assert used_lrs == pytest.approx([0.1, 0.075, 0.05, 0.025])
-    assert optim.param_groups[0]["lr"] == pytest.approx(0.0)
+    assert get_scheduler(optim, "none", 100) is None
+    assert optim.param_groups[0]["lr"] == pytest.approx(0.1)
