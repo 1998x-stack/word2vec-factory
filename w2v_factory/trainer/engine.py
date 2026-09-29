@@ -61,7 +61,7 @@ class Trainer:
         self.neg_sampler = None
         if cfg.MODEL.loss == "hs":
             self.hs_paths, self.hs_codes = build_huffman_codes(self.vocab.counts)
-            out_nodes = 2 * self.vocab.size - 1
+            out_nodes = self.vocab.size - 1
         else:
             self.neg_sampler = build_unigram_sampler(self.vocab.counts)
             out_nodes = self.vocab.size
