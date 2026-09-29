@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from w2v_factory.config import load_cfg
@@ -53,3 +55,11 @@ def test_cyclic_include_is_rejected(tmp_path):
     b.write_text("INCLUDE: a.yaml\n", encoding="utf-8")
     with pytest.raises(ValueError, match="Cyclic config INCLUDE"):
         load_cfg(str(a))
+
+
+@pytest.mark.parametrize("name", ["cbow_hs.yaml", "paper_repro.yaml", "skipgram_ns.yaml"])
+def test_repo_configs_resolve_relative_includes(name):
+    repo_root = Path(__file__).resolve().parents[1]
+    cfg = load_cfg(str(repo_root / "configs" / name))
+    assert cfg.DATA.input_files
+    assert cfg.MODEL.dim > 0
