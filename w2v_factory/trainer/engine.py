@@ -245,6 +245,11 @@ class Trainer:
             local_trainable_seen += eligible
             stats.trainable_tokens += eligible
             stats.retained_tokens += len(ids)
+            if local_trainable_seen > self.training_plan.trainable_tokens_per_epoch:
+                raise RuntimeError(
+                    "Corpus/tokenizer drift detected after vocabulary build: "
+                    "observed more in-vocabulary tokens than the training plan"
+                )
 
             if len(ids) < 2:
                 continue
