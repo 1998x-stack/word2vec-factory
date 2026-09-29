@@ -9,7 +9,7 @@
 5. **Training-data memory (addressed 2026-09-29).** After the vocabulary pass, every epoch rereads the corpus line-by-line. Encoded sentences and positive pairs are no longer materialized across the corpus; only the current sentence and a bounded example batch are retained.
 6. **LR progress accounting (addressed 2026-09-29).** The intermediate exact pair-step planner was replaced by source-token progress. Linear LR now has a deterministic denominator independent of randomized Skip-gram windows, subsampling outcomes, or negative-sampling retries.
 7. **NumPy RNG coupling (addressed 2026-09-29).** Subsampling, negative sampling, and per-epoch context windows use independent deterministic streams. Subsampling is recreated per epoch, so epochs no longer reuse one frozen subsampled corpus.
-8. **Corpus drift during training (addressed 2026-09-29).** Each streaming epoch recounts in-vocabulary source tokens and compares them with the vocabulary pass. A changed corpus/tokenizer fails explicitly instead of silently invalidating LR progress.
+8. **Corpus drift during training (addressed 2026-09-29).** Each streaming epoch recounts in-vocabulary source tokens and recomputes the vocabulary pass's SHA-256 token-stream fingerprint. This catches equal-count reordering/substitution as well as cardinality changes instead of silently training against a changed corpus/tokenizer.
 
 ## Validation gates
 
