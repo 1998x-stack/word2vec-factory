@@ -10,7 +10,7 @@ industrial ablation and for learning word2vec from scratch.
 - Accurate Huffman Hierarchical Softmax.
 - Negative Sampling with unigram^0.75 alias-table sampling.
 - Subsampling of frequent words and randomized context windows (paper-style).
-- Bounded-memory corpus streaming, token-progress linear LR decay, isolated deterministic RNG streams, TensorBoard, and Loguru logging.
+- Bounded-memory corpus streaming, token-progress linear LR decay, isolated deterministic RNG streams, atomic epoch checkpoints/resume, TensorBoard, and Loguru logging.
 - Google Analogy evaluation and batch ablation sweeps.
 
 ## Installing
@@ -65,6 +65,7 @@ questions-words.txt Google analogy dataset
 
 - [Architecture](docs/architecture.md)
 - [Streaming training and token progress](docs/training-plan.md)
+- [Checkpoint and resume](docs/checkpoint-resume.md)
 - [Configuration reference](docs/config-reference.md)
 - [Ablations](docs/ablation.md)
 - [Evaluation](docs/evaluation.md)
