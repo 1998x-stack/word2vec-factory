@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 from ..data.dataset import count_skipgram_pairs
 from ..utils import make_numpy_rng
 
@@ -16,7 +18,7 @@ class EpochPlan:
     optimizer_steps: int
 
 
-def pair_rng(seed: int, epoch: int):
+def pair_rng(seed: int, epoch: int) -> np.random.Generator:
     """Return the deterministic context-window RNG for one epoch."""
     if epoch < 0:
         raise ValueError("epoch must be non-negative")
