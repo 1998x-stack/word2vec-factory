@@ -89,6 +89,7 @@ def test_trainer_rereads_corpus_for_every_epoch(tmp_path, monkeypatch):
         stats.max_buffer_examples <= cfg.TRAIN.batch_size
         for stats in trainer.epoch_stats
     )
+    assert trainer.optim.param_groups[0]["lr"] == pytest.approx(0.0)
 
 
 def test_corpus_drift_after_vocab_build_is_rejected(tmp_path):
