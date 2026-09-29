@@ -7,11 +7,23 @@ import torch
 
 
 def set_seed(seed: int) -> None:
-    """设置全局随机种子，确保可复现。"""
+    """Seed Python, legacy NumPy, and PyTorch global RNGs."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def make_numpy_rng(seed: int, *stream_ids: int) -> np.random.Generator:
+    """Create an independent deterministic NumPy RNG stream.
+
+    Stream identifiers make randomness component-local: advancing negative
+    sampling must not perturb context-window sampling or subsampling.
+    """
+    if any(not isinstance(stream_id, int) or isinstance(stream_id, bool) for stream_id in stream_ids):
+        raise ValueError("RNG stream ids must be integers")
+    sequence = np.random.SeedSequence([seed, *stream_ids])
+    return np.random.default_rng(sequence)
 
 
 def pick_device(cfg_device: str) -> torch.device:
@@ -19,8 +31,3 @@ def pick_device(cfg_device: str) -> torch.device:
     if cfg_device == "auto":
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return torch.device(cfg_device)
-
-
-def linear_decay(it: int, total: int) -> float:
-    """线性学习率衰减系数（从1到0）。"""
-    return max(0.0, 1.0 - it / float(total))
