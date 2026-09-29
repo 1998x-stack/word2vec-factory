@@ -14,6 +14,26 @@ class TokenProgressScheduler:
         self.base_lrs = [float(group["lr"]) for group in optim.param_groups]
         self.progress = 0
 
+    def state_dict(self) -> dict:
+        return {
+            "total_tokens": self.total_tokens,
+            "base_lrs": list(self.base_lrs),
+            "progress": self.progress,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        if state.get("total_tokens") != self.total_tokens:
+            raise ValueError("Scheduler total_tokens does not match checkpoint")
+        base_lrs = list(state.get("base_lrs", []))
+        if base_lrs != self.base_lrs:
+            raise ValueError("Scheduler base learning rates do not match checkpoint")
+        progress = state.get("progress")
+        if not isinstance(progress, int):
+            raise ValueError("Scheduler checkpoint progress must be an integer")
+        # Restore through the same invariant-checked path.
+        self.progress = 0
+        self.set_progress(progress)
+
     def set_progress(self, processed_tokens: int) -> None:
         if processed_tokens < self.progress:
             raise ValueError("token progress must be monotonic")
