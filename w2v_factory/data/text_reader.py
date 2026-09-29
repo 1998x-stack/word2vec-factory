@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterable
 from ..registry import TOKENIZER_REG
 
 
+@TOKENIZER_REG.register("whitespace")
 @TOKENIZER_REG.register("simple")
 def simple_tokenizer(line: str, lowercase: bool = True) -> list[str]:
     """简单分词：按空白切分；可统一小写。"""
