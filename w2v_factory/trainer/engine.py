@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from dataclasses import asdict
 from typing import Any
 
@@ -23,6 +24,16 @@ from ..losses.hierarchical_softmax import pack_hs_batch
 from ..losses.negative_sampling import draw_negatives
 from ..models.cbow import CBOW
 from ..models.skipgram import SkipGram
+from ..trainer.checkpoint import (
+    CHECKPOINT_FORMAT,
+    CHECKPOINT_VERSION,
+    CheckpointError,
+    atomic_torch_save,
+    capture_global_rng_state,
+    load_checkpoint,
+    restore_global_rng_state,
+    training_signature,
+)
 from ..trainer.exporter import save_json, save_numpy, save_word2vec_txt
 from ..trainer.lr_schedulers import get_scheduler
 from ..trainer.planning import PAIR_RNG_STREAM, TrainingPlan, build_training_plan, pair_rng
@@ -50,6 +61,13 @@ class Trainer:
             raise ValueError("Unsupported Word2Vec architecture or loss")
         if cfg.MODEL.loss == "ns" and cfg.MODEL.ns_neg_k <= 0:
             raise ValueError("ns_neg_k must be positive")
+        cadence = cfg.RUN.checkpoint_every_epochs
+        if cadence is not None and (
+            not isinstance(cadence, int) or isinstance(cadence, bool) or cadence <= 0
+        ):
+            raise ValueError("checkpoint_every_epochs must be a positive integer or null")
+        if cfg.RUN.resume_from is not None and not isinstance(cfg.RUN.resume_from, str):
+            raise ValueError("resume_from must be a checkpoint path string or null")
 
         self.device = pick_device(cfg.TRAIN.device)
         set_seed(cfg.SEED)
@@ -116,6 +134,121 @@ class Trainer:
         )
         self.epoch_stats: list[StreamingEpochStats] = []
         self.completed_steps = 0
+        self.next_epoch = 0
+        self.resume_start_epoch = 0
+        self.resumed_from: str | None = None
+
+        if cfg.RUN.resume_from:
+            self._restore_checkpoint(cfg.RUN.resume_from)
+
+    def _checkpoint_payload(self, next_epoch: int) -> dict[str, Any]:
+        sampler_state = None
+        if self.neg_sampler is not None:
+            sampler_state = self.neg_sampler.get_rng_state()
+        return {
+            "format": CHECKPOINT_FORMAT,
+            "version": CHECKPOINT_VERSION,
+            "training_signature": training_signature(self.cfg),
+            "corpus_sha256": self.vocab.corpus_sha256,
+            "vocab": {
+                "itos": self.vocab.itos,
+                "counts": self.vocab.counts,
+                "total_tokens": self.vocab.total_tokens,
+            },
+            "training_plan": asdict(self.training_plan),
+            "next_epoch": next_epoch,
+            "completed_steps": self.completed_steps,
+            "epoch_stats": [asdict(stats) for stats in self.epoch_stats],
+            "model": self.model.state_dict(),
+            "optimizer": self.optim.state_dict(),
+            "scheduler": None if self.sched is None else self.sched.state_dict(),
+            "negative_sampler_rng": sampler_state,
+            "global_rng": capture_global_rng_state(),
+        }
+
+    def _save_checkpoint(self, next_epoch: int) -> Path:
+        if next_epoch <= 0 or next_epoch > self.cfg.TRAIN.epochs:
+            raise ValueError("checkpoint next_epoch is outside the configured training run")
+        if len(self.epoch_stats) != next_epoch:
+            raise RuntimeError("Checkpoint can only be written at a completed epoch boundary")
+        checkpoint_dir = Path(self.cfg.RUN.out_dir) / "checkpoints"
+        path = checkpoint_dir / f"epoch-{next_epoch:04d}.pt"
+        digest = atomic_torch_save(path, self._checkpoint_payload(next_epoch))
+        logger.info("Saved checkpoint: {} sha256={}", path, digest)
+        return path
+
+    def _restore_checkpoint(self, path: str) -> None:
+        payload = load_checkpoint(path, map_location=self.device)
+
+        expected_signature = training_signature(self.cfg)
+        if payload.get("training_signature") != expected_signature:
+            raise CheckpointError("Checkpoint training configuration is incompatible")
+        if payload.get("corpus_sha256") != self.vocab.corpus_sha256:
+            raise CheckpointError("Checkpoint corpus fingerprint does not match current corpus")
+
+        vocab = payload.get("vocab")
+        if not isinstance(vocab, dict):
+            raise CheckpointError("Checkpoint vocabulary metadata is missing")
+        if vocab.get("itos") != self.vocab.itos or vocab.get("counts") != self.vocab.counts:
+            raise CheckpointError("Checkpoint vocabulary does not match current vocabulary")
+        if vocab.get("total_tokens") != self.vocab.total_tokens:
+            raise CheckpointError("Checkpoint corpus token count does not match current corpus")
+        if payload.get("training_plan") != asdict(self.training_plan):
+            raise CheckpointError("Checkpoint training plan does not match current run")
+
+        next_epoch = payload.get("next_epoch")
+        completed_steps = payload.get("completed_steps")
+        epoch_stats = payload.get("epoch_stats")
+        if (
+            not isinstance(next_epoch, int)
+            or isinstance(next_epoch, bool)
+            or next_epoch < 0
+            or next_epoch > self.cfg.TRAIN.epochs
+        ):
+            raise CheckpointError("Checkpoint next_epoch is invalid")
+        if not isinstance(completed_steps, int) or completed_steps < 0:
+            raise CheckpointError("Checkpoint completed_steps is invalid")
+        if not isinstance(epoch_stats, list) or len(epoch_stats) != next_epoch:
+            raise CheckpointError("Checkpoint epoch statistics do not match next_epoch")
+
+        try:
+            self.model.load_state_dict(payload["model"], strict=True)
+            self.optim.load_state_dict(payload["optimizer"])
+            scheduler_state = payload.get("scheduler")
+            if self.sched is None:
+                if scheduler_state is not None:
+                    raise CheckpointError("Checkpoint has scheduler state but current run does not")
+            else:
+                if scheduler_state is None:
+                    raise CheckpointError("Checkpoint is missing scheduler state")
+                self.sched.load_state_dict(scheduler_state)
+
+            sampler_state = payload.get("negative_sampler_rng")
+            if self.neg_sampler is None:
+                if sampler_state is not None:
+                    raise CheckpointError("Checkpoint has negative-sampler state for HS training")
+            else:
+                self.neg_sampler.set_rng_state(sampler_state)
+
+            restored_stats = [StreamingEpochStats(**item) for item in epoch_stats]
+        except CheckpointError:
+            raise
+        except Exception as exc:
+            raise CheckpointError("Checkpoint model/optimizer state is incompatible") from exc
+
+        self.epoch_stats = restored_stats
+        self.completed_steps = completed_steps
+        self.next_epoch = next_epoch
+        self.resume_start_epoch = next_epoch
+        self.resumed_from = str(Path(path).resolve())
+        restore_global_rng_state(payload.get("global_rng", {}))
+        logger.info(
+            "Resumed checkpoint {} at epoch {}/{} step={}",
+            path,
+            next_epoch,
+            self.cfg.TRAIN.epochs,
+            completed_steps,
+        )
 
     def _train_batch(
         self,
@@ -308,9 +441,19 @@ class Trainer:
                 },
             },
             "training_plan": asdict(self.training_plan),
+            "recovery": {
+                "checkpoint_format": CHECKPOINT_FORMAT,
+                "checkpoint_version": CHECKPOINT_VERSION,
+                "checkpoint_every_epochs": self.cfg.RUN.checkpoint_every_epochs,
+                "resumed_from": self.resumed_from,
+                "resume_start_epoch": self.resume_start_epoch,
+            },
             "runtime": {
                 "memory_mode": "streaming",
                 "corpus_passes": 1 + self.cfg.TRAIN.epochs,
+                "corpus_passes_this_process": 1 + (
+                    self.cfg.TRAIN.epochs - self.resume_start_epoch
+                ),
                 "device": str(self.device),
                 "vocab_size": self.vocab.size,
                 "raw_tokens": self.vocab.total_tokens,
@@ -330,8 +473,8 @@ class Trainer:
     def train(self) -> None:
         """Train by rereading and subsampling the corpus independently each epoch."""
         try:
-            step = 0
-            for epoch in range(self.cfg.TRAIN.epochs):
+            step = self.completed_steps
+            for epoch in range(self.next_epoch, self.cfg.TRAIN.epochs):
                 logger.info(
                     "Epoch {}/{}: streaming corpus pass",
                     epoch + 1,
@@ -339,6 +482,13 @@ class Trainer:
                 )
                 step, stats = self._train_epoch(step, epoch)
                 self.epoch_stats.append(stats)
+                self.completed_steps = step
+                self.next_epoch = epoch + 1
+
+                cadence = self.cfg.RUN.checkpoint_every_epochs
+                if cadence is not None and self.next_epoch % cadence == 0:
+                    self._save_checkpoint(self.next_epoch)
+
                 logger.info(
                     "Epoch {}/{} complete: trainable_tokens={}, retained_tokens={}, "
                     "examples={}, optimizer_steps={}, peak_buffer={}",
@@ -354,6 +504,7 @@ class Trainer:
             if step <= 0:
                 raise ValueError("No training examples remain after vocabulary filtering and subsampling")
             self.completed_steps = step
+            self.next_epoch = self.cfg.TRAIN.epochs
 
             embeddings = self.model.in_embed.weight.detach().cpu().numpy()
             txt_path = os.path.join(self.cfg.RUN.out_dir, "embeddings.txt")
