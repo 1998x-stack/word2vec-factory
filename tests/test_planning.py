@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from w2v_factory.data.dataset import generate_cbow_pairs, generate_skipgram_pairs
 from w2v_factory.data.sampler import build_unigram_sampler
 from w2v_factory.trainer.planning import build_epoch_plans, pair_rng
@@ -58,3 +60,12 @@ def test_negative_sampling_does_not_perturb_window_stream():
 
     actual = list(generate_skipgram_pairs(sent, 4, rng=pair_rng(5, 0)))
     assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "seed,stream_ids",
+    [(-1, ()), (True, ()), (1, (-1,)), (1, (False,))],
+)
+def test_rng_factory_rejects_invalid_seed_components(seed, stream_ids):
+    with pytest.raises(ValueError, match="RNG"):
+        make_numpy_rng(seed, *stream_ids)
