@@ -6,7 +6,7 @@
 2. **Negative-sampling false negatives (fixed in this PR).** A single redraw after a positive/negative collision does not ensure the redraw differs from the positive. Batched rejection sampling now retries until every row excludes its positive. A one-word vocabulary with a forbidden positive is rejected.
 3. **HS Python-loop overhead (addressed 2026-09-29).** Skip-gram and CBOW HS now compute path scores with masked tensor operations. CBOW has a scalar-reference regression test that checks both loss and gradients.
 4. **HS output-table memory (addressed 2026-09-29).** Huffman paths now use compact internal-node IDs, so HS allocates `V-1` output vectors instead of `2V-1`.
-5. **Training-data memory (partially addressed).** The old engine allocated all epoch pairs; the revised engine produces pairs lazily in batches. The encoded corpus is still materialized in RAM, so this is not a streaming-corpus implementation.
+5. **Training-data memory (partially addressed).** The old engine allocated all epoch pairs; the revised engine produces pairs lazily in batches. The encoded corpus is still materialized in RAM, so this is not a streaming-corpus implementation.\n6. **LR step accounting (addressed 2026-09-29).** Training now builds an exact per-epoch example/optimizer-step plan and asserts actual steps match it. Linear LR decay no longer depends on an architecture-agnostic approximation.\n7. **NumPy RNG coupling (addressed 2026-09-29).** Subsampling, negative sampling, and per-epoch context windows use independent deterministic streams; extra draws in one component no longer perturb another component's training trajectory.
 
 ## Validation gates
 
