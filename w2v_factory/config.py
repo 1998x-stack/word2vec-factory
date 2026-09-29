@@ -14,6 +14,8 @@ from .data.subsample import _coerce_t
 class RunCfg:
     out_dir: str = "runs/exp1"
     tb: bool = True
+    checkpoint_every_epochs: int | None = None
+    resume_from: str | None = None
 
 
 @dataclass
