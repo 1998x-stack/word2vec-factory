@@ -63,3 +63,11 @@ def test_repo_configs_resolve_relative_includes(name):
     cfg = load_cfg(str(repo_root / "configs" / name))
     assert cfg.DATA.input_files
     assert cfg.MODEL.dim > 0
+
+
+def test_missing_data_section_preserves_dataclass_defaults(tmp_path):
+    cfg_file = tmp_path / "minimal.yaml"
+    cfg_file.write_text("SEED: 7\n", encoding="utf-8")
+    cfg = load_cfg(str(cfg_file))
+    assert cfg.DATA.subsample_t == pytest.approx(1e-5)
+    assert cfg.DATA.max_vocab == 1_000_000
