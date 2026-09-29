@@ -55,6 +55,8 @@ backward + optimizer.step + (lr decay) + logging
 
 - **Negative sampling**: objective is `log σ(v·u₀) + Σ_neg log σ(-v·u_k)`.
 - **Hierarchical softmax**: each word gets a root-to-leaf Huffman path; the loss is
-  the product of per-node Bernoulli probabilities `σ((2code−1)·v·u_node)`.
+  the product of per-node Bernoulli probabilities `σ((2code−1)·v·u_node)`. Only the
+  `V-1` internal Huffman nodes receive output embeddings; path IDs are compact in
+  `[0, V-2]`.
 
 See `docs/from-scratch.md` for derivations.
