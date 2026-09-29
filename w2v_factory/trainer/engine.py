@@ -18,7 +18,7 @@ from ..data.huffman import build_huffman_codes
 from ..data.sampler import build_unigram_sampler
 from ..data.subsample import compute_discard_probs
 from ..data.text_reader import iter_tokens
-from ..data.vocab import Vocab, build_vocab
+from ..data.vocab import TokenStreamFingerprint, Vocab, build_vocab
 from ..losses.hierarchical_softmax import pack_hs_batch
 from ..losses.negative_sampling import draw_negatives
 from ..models.cbow import CBOW
@@ -216,6 +216,7 @@ class Trainer:
 
         epoch_offset = epoch * self.training_plan.trainable_tokens_per_epoch
         local_trainable_seen = 0
+        fingerprint = TokenStreamFingerprint()
         step = step0
         batch: list[tuple[Any, int]] = []
 
@@ -239,6 +240,7 @@ class Trainer:
             self.cfg.DATA.tokenizer,
             self.cfg.DATA.max_sent_len,
         ):
+            fingerprint.update(tokens)
             stats.source_sentences += 1
             ids, positions, eligible = indexer.encode_with_positions(tokens)
             sentence_base = local_trainable_seen
@@ -275,6 +277,11 @@ class Trainer:
                 "Corpus/tokenizer drift detected after vocabulary build: "
                 f"expected {expected} in-vocabulary tokens, observed {local_trainable_seen}"
             )
+        if fingerprint.hexdigest() != self.vocab.corpus_sha256:
+            raise RuntimeError(
+                "Corpus/tokenizer drift detected after vocabulary build: "
+                "tokenized stream fingerprint changed"
+            )
 
         if self.sched is not None:
             self.sched.set_progress((epoch + 1) * expected)
@@ -307,6 +314,8 @@ class Trainer:
                 "device": str(self.device),
                 "vocab_size": self.vocab.size,
                 "raw_tokens": self.vocab.total_tokens,
+                "source_sentences": self.vocab.sentences,
+                "corpus_sha256": self.vocab.corpus_sha256,
                 "actual_examples": actual_examples,
                 "actual_optimizer_steps": self.completed_steps,
                 "peak_buffer_examples": peak_buffer,
