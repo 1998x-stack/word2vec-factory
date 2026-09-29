@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 
 from w2v_factory.config import Cfg, DataCfg, ModelCfg, RunCfg, TrainCfg
-from w2v_factory.data.dataset import SentenceIndexer
+from w2v_factory.data.dataset import (
+    SentenceIndexer,
+    generate_cbow_pairs_with_progress,
+    generate_skipgram_pairs_with_progress,
+)
 from w2v_factory.trainer import engine
 from w2v_factory.trainer.engine import SUBSAMPLE_RNG_STREAM, Trainer
 from w2v_factory.utils import make_numpy_rng
@@ -48,6 +52,31 @@ def test_indexer_progress_counts_discarded_but_not_oov_tokens():
     assert positions == [2]
     assert eligible == 2
 
+
+
+def test_pair_progress_tracks_center_or_target_source_position():
+    tokens = [10, 11, 12]
+    positions = [2, 4, 7]
+
+    skipgram = list(
+        generate_skipgram_pairs_with_progress(
+            tokens,
+            positions,
+            max_window=1,
+            rng=np.random.default_rng(0),
+        )
+    )
+    assert [progress for _, progress in skipgram] == [2, 4, 4, 7]
+
+    cbow = list(
+        generate_cbow_pairs_with_progress(
+            tokens,
+            positions,
+            max_window=1,
+            rng=np.random.default_rng(0),
+        )
+    )
+    assert [progress for _, progress in cbow] == positions
 
 def test_epoch_subsampling_stream_is_replayable_and_epoch_local():
     stoi = {"x": 0}
