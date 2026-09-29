@@ -7,7 +7,8 @@ import torch.nn.functional as F
 
 from w2v_factory.config import Cfg, DataCfg, ModelCfg, RunCfg, TrainCfg
 from w2v_factory.losses.negative_sampling import draw_negatives
-from w2v_factory.models.cbow import CBOW\nfrom w2v_factory.models.skipgram import SkipGram
+from w2v_factory.models.cbow import CBOW
+from w2v_factory.models.skipgram import SkipGram
 from w2v_factory.trainer import engine
 
 
