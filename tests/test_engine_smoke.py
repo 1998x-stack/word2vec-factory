@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from w2v_factory.config import Cfg, DataCfg, EvalCfg, ModelCfg, RunCfg, TrainCfg
@@ -41,3 +43,11 @@ def test_train_smoke(tmp_path, arch, loss):
 
     assert (out_dir / "embeddings.txt").exists()
     assert (out_dir / "embeddings.npy").exists()
+    manifest_path = out_dir / "run_manifest.json"
+    assert manifest_path.exists()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    runtime = manifest["runtime"]
+    assert runtime["planned_optimizer_steps"] == runtime["actual_optimizer_steps"]
+    assert runtime["actual_optimizer_steps"] > 0
+    assert len(runtime["epoch_plans"]) == 1

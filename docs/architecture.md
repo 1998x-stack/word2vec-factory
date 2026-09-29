@@ -38,9 +38,11 @@ compute_discard_probs()                  (subsample_t)
    ▼
 SentenceIndexer.encode()                 (ids + frequent-word dropping)
    │
-generate_{skipgram,cbow}_pairs()         (randomized window)
+build_epoch_plans()                     (exact examples + optimizer steps)
+   │
+generate_{skipgram,cbow}_pairs()         (per-epoch deterministic window RNG)
    ▼
-batching + packing (HS paths or negative samples) + forward pass
+batching + packing (HS paths or isolated negative-sampling RNG) + forward pass
    ▼
 backward + optimizer.step + (lr decay) + logging
 ```
@@ -60,3 +62,13 @@ backward + optimizer.step + (lr decay) + logging
   `[0, V-2]`.
 
 See `docs/from-scratch.md` for derivations.
+
+## Training control and reproducibility
+
+Training randomness is split into independent streams for subsampling, negative
+sampling, and per-epoch context windows. The context-window stream is replayed
+during planning so the linear LR scheduler receives an exact optimizer-step
+count. Successful runs write `run_manifest.json` with the resolved config,
+epoch plans, RNG stream assignments, and planned/actual step counts.
+
+See [training-plan.md](training-plan.md) for the invariants and rationale.

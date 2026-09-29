@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import asdict
 from itertools import islice
 
 import numpy as np
@@ -18,9 +19,13 @@ from ..losses.hierarchical_softmax import pack_hs_batch
 from ..losses.negative_sampling import draw_negatives
 from ..models.cbow import CBOW
 from ..models.skipgram import SkipGram
-from ..trainer.exporter import save_numpy, save_word2vec_txt
+from ..trainer.exporter import save_json, save_numpy, save_word2vec_txt
 from ..trainer.lr_schedulers import get_scheduler
-from ..utils import pick_device, set_seed
+from ..trainer.planning import PAIR_RNG_STREAM, EpochPlan, build_epoch_plans, pair_rng
+from ..utils import make_numpy_rng, pick_device, set_seed
+
+SUBSAMPLE_RNG_STREAM = 1
+NEGATIVE_RNG_STREAM = 2
 
 
 class Trainer:
@@ -30,6 +35,10 @@ class Trainer:
         self.cfg = cfg
         if cfg.TRAIN.batch_size <= 0 or cfg.TRAIN.epochs <= 0:
             raise ValueError("batch_size and epochs must be positive")
+        if cfg.TRAIN.lr <= 0:
+            raise ValueError("learning rate must be positive")
+        if cfg.TRAIN.lr_schedule not in {"linear", "none"}:
+            raise ValueError(f"Unsupported lr_schedule: {cfg.TRAIN.lr_schedule}")
         if cfg.MODEL.window <= 0 or cfg.MODEL.dim <= 0:
             raise ValueError("window and embedding dimension must be positive")
         if cfg.MODEL.arch not in {"skipgram", "cbow"} or cfg.MODEL.loss not in {"ns", "hs"}:
@@ -55,7 +64,11 @@ class Trainer:
         discard_probs = compute_discard_probs(
             self.vocab.counts, self.vocab.total_tokens, cfg.DATA.subsample_t
         )
-        self.indexer = SentenceIndexer(self.vocab.stoi, discard_probs)
+        self.indexer = SentenceIndexer(
+            self.vocab.stoi,
+            discard_probs,
+            rng=make_numpy_rng(cfg.SEED, SUBSAMPLE_RNG_STREAM),
+        )
         self.hs_paths: list[list[int]] | None = None
         self.hs_codes: list[list[int]] | None = None
         self.neg_sampler = None
@@ -63,7 +76,10 @@ class Trainer:
             self.hs_paths, self.hs_codes = build_huffman_codes(self.vocab.counts)
             out_nodes = self.vocab.size - 1
         else:
-            self.neg_sampler = build_unigram_sampler(self.vocab.counts)
+            self.neg_sampler = build_unigram_sampler(
+                self.vocab.counts,
+                rng=make_numpy_rng(cfg.SEED, NEGATIVE_RNG_STREAM),
+            )
             out_nodes = self.vocab.size
 
         model_type = SkipGram if cfg.MODEL.arch == "skipgram" else CBOW
@@ -79,17 +95,22 @@ class Trainer:
             self.optim = torch.optim.Adam(self.model.parameters(), lr=cfg.TRAIN.lr)
         else:
             raise ValueError(f"Unsupported optimizer: {cfg.TRAIN.optimizer}")
-        self.sched = None
 
-    def _train_epoch(self, sents: list[list[int]], step0: int) -> int:
-        """Build bounded batches of fresh pairs rather than materializing every pair."""
+        self.sched = None
+        self.epoch_plans: list[EpochPlan] = []
+        self.completed_steps = 0
+
+    def _train_epoch(self, sents: list[list[int]], step0: int, epoch: int = 0) -> int:
+        """Train one epoch from a deterministic, bounded pair stream."""
         arch = self.cfg.MODEL.arch
         loss = self.cfg.MODEL.loss
         window = self.cfg.MODEL.window
         batch_size = self.cfg.TRAIN.batch_size
         pair_fn = generate_skipgram_pairs if arch == "skipgram" else generate_cbow_pairs
-        examples = (pair for sent in sents for pair in pair_fn(sent, window))
+        window_rng = pair_rng(self.cfg.SEED, epoch)
+        examples = (pair for sent in sents for pair in pair_fn(sent, window, rng=window_rng))
         step = step0
+
         while batch := list(islice(examples, batch_size)):
             if arch == "skipgram":
                 centers, targets = zip(*batch)
@@ -106,8 +127,6 @@ class Trainer:
 
             if loss == "hs":
                 assert self.hs_paths is not None and self.hs_codes is not None
-                # Always use the *predicted target* as the Huffman label. For
-                # Skip-gram this is the context, never the input center word.
                 paths, codes, path_lens = pack_hs_batch(
                     target_ids.cpu(), self.hs_paths, self.hs_codes
                 )
@@ -128,21 +147,57 @@ class Trainer:
                 else:
                     result = self.model.forward_ns(inputs, lengths, target_ids, negatives)
 
+            lr_used = float(self.optim.param_groups[0]["lr"])
             self.optim.zero_grad(set_to_none=True)
             result.loss.backward()
             self.optim.step()
             if self.sched is not None:
                 self.sched.step()
+
             if step % 200 == 0:
                 value = result.loss.item()
-                logger.info("[{}-{}][step={}] loss={:.4f}", arch, loss, step, value)
+                logger.info(
+                    "[{}-{}][step={}] loss={:.4f} lr={:.6g}",
+                    arch,
+                    loss,
+                    step,
+                    value,
+                    lr_used,
+                )
                 if self.writer is not None:
                     self.writer.add_scalar("train/loss", value, step)
+                    self.writer.add_scalar("train/lr", lr_used, step)
             step += 1
+
         return step
 
+    def _write_manifest(self, planned_steps: int) -> None:
+        manifest = {
+            "config": asdict(self.cfg),
+            "rng_streams": {
+                "subsampling": SUBSAMPLE_RNG_STREAM,
+                "negative_sampling": NEGATIVE_RNG_STREAM,
+                "context_windows": {
+                    "stream": PAIR_RNG_STREAM,
+                    "per_epoch": True,
+                },
+            },
+            "runtime": {
+                "device": str(self.device),
+                "vocab_size": self.vocab.size,
+                "total_tokens": self.vocab.total_tokens,
+                "planned_optimizer_steps": planned_steps,
+                "actual_optimizer_steps": self.completed_steps,
+                "final_lr": float(self.optim.param_groups[0]["lr"]),
+                "epoch_plans": [asdict(plan) for plan in self.epoch_plans],
+            },
+        }
+        path = os.path.join(self.cfg.RUN.out_dir, "run_manifest.json")
+        save_json(path, manifest)
+        logger.info("Saved run manifest: {}", path)
+
     def train(self) -> None:
-        """Encode once; regenerate local context windows for each epoch."""
+        """Encode once, then train against an exact deterministic epoch plan."""
         try:
             logger.info("Encoding corpus with subsampling...")
             sents = []
@@ -158,22 +213,52 @@ class Trainer:
             if not sents:
                 raise ValueError("No training pairs remain after vocabulary filtering and subsampling")
 
-            approx_pairs = sum(max(0, len(s) - 1) * self.cfg.MODEL.window for s in sents)
-            est_steps = max(1, int(
-                approx_pairs * self.cfg.TRAIN.epochs / self.cfg.TRAIN.batch_size
-            ))
-            self.sched = get_scheduler(self.optim, self.cfg.TRAIN.lr_schedule, est_steps)
+            self.epoch_plans = build_epoch_plans(
+                sents=sents,
+                arch=self.cfg.MODEL.arch,
+                window=self.cfg.MODEL.window,
+                batch_size=self.cfg.TRAIN.batch_size,
+                epochs=self.cfg.TRAIN.epochs,
+                seed=self.cfg.SEED,
+            )
+            planned_steps = sum(plan.optimizer_steps for plan in self.epoch_plans)
+            planned_examples = sum(plan.examples for plan in self.epoch_plans)
+            logger.info(
+                "Training plan: epochs={}, examples={}, optimizer_steps={}",
+                len(self.epoch_plans),
+                planned_examples,
+                planned_steps,
+            )
+            self.sched = get_scheduler(self.optim, self.cfg.TRAIN.lr_schedule, planned_steps)
 
             step = 0
-            for epoch in range(self.cfg.TRAIN.epochs):
-                logger.info("Epoch {}/{}", epoch + 1, self.cfg.TRAIN.epochs)
-                step = self._train_epoch(sents, step)
+            for plan in self.epoch_plans:
+                logger.info(
+                    "Epoch {}/{}: planned_examples={}, planned_steps={}",
+                    plan.epoch + 1,
+                    self.cfg.TRAIN.epochs,
+                    plan.examples,
+                    plan.optimizer_steps,
+                )
+                step_before = step
+                step = self._train_epoch(sents, step, epoch=plan.epoch)
+                actual_epoch_steps = step - step_before
+                if actual_epoch_steps != plan.optimizer_steps:
+                    raise RuntimeError(
+                        f"Training plan drift in epoch {plan.epoch + 1}: "
+                        f"planned {plan.optimizer_steps} steps, got {actual_epoch_steps}"
+                    )
+
+            if step != planned_steps:
+                raise RuntimeError(f"Training plan drift: planned {planned_steps} steps, got {step}")
+            self.completed_steps = step
 
             embeddings = self.model.in_embed.weight.detach().cpu().numpy()
             txt_path = os.path.join(self.cfg.RUN.out_dir, "embeddings.txt")
             npy_path = os.path.join(self.cfg.RUN.out_dir, "embeddings.npy")
             save_word2vec_txt(txt_path, self.vocab.itos, embeddings)
             save_numpy(npy_path, embeddings)
+            self._write_manifest(planned_steps)
             logger.info("Saved vectors: {}, {}", txt_path, npy_path)
         finally:
             if self.writer is not None:
