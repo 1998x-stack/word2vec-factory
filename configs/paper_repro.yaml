@@ -1,4 +1,4 @@
-INCLUDE: configs/base.yaml
+INCLUDE: base.yaml
 DATA:
   subsample_t: null
 MODEL:
