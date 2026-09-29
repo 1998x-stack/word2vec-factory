@@ -20,8 +20,13 @@ def make_numpy_rng(seed: int, *stream_ids: int) -> np.random.Generator:
     Stream identifiers make randomness component-local: advancing negative
     sampling must not perturb context-window sampling or subsampling.
     """
-    if any(not isinstance(stream_id, int) or isinstance(stream_id, bool) for stream_id in stream_ids):
-        raise ValueError("RNG stream ids must be integers")
+    if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
+        raise ValueError("RNG seed must be a non-negative integer")
+    if any(
+        not isinstance(stream_id, int) or isinstance(stream_id, bool) or stream_id < 0
+        for stream_id in stream_ids
+    ):
+        raise ValueError("RNG stream ids must be non-negative integers")
     sequence = np.random.SeedSequence([seed, *stream_ids])
     return np.random.default_rng(sequence)
 
