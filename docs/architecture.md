@@ -29,22 +29,29 @@ clarity; the registry keeps new components easy to add and ablate.
 ## Data flow
 
 ```
-raw text files
-   │  iter_tokens()                      (line-by-line tokenization)
+pass 1: raw text files
+   │  iter_tokens()                      (line-by-line)
    ▼
-build_vocab()                            (min_count, max_vocab)
+build_vocab()                            (counts + min_count/max_vocab)
    │
-compute_discard_probs()                  (subsample_t)
-   ▼
-SentenceIndexer.encode()                 (ids + frequent-word dropping)
+   ├── compute_discard_probs()
+   └── build_training_plan()             (token-progress denominator)
+
+passes 2..E+1: reread raw text each epoch
    │
-build_epoch_plans()                     (exact examples + optimizer steps)
+   ▼
+SentenceIndexer.encode_with_positions()  (epoch-specific subsampling)
    │
-generate_{skipgram,cbow}_pairs()         (per-epoch deterministic window RNG)
    ▼
-batching + packing (HS paths or isolated negative-sampling RNG) + forward pass
+generate_*_pairs_with_progress()         (epoch-specific window RNG)
+   │
    ▼
-backward + optimizer.step + (lr decay) + logging
+bounded batch buffer                     (<= TRAIN.batch_size examples)
+   │
+   ├── token-progress LR
+   └── HS paths / isolated NS RNG
+   ▼
+forward → backward → optimizer.step()
 ```
 
 ## Model responsibilities
@@ -65,10 +72,12 @@ See `docs/from-scratch.md` for derivations.
 
 ## Training control and reproducibility
 
-Training randomness is split into independent streams for subsampling, negative
-sampling, and per-epoch context windows. The context-window stream is replayed
-during planning so the linear LR scheduler receives an exact optimizer-step
-count. Successful runs write `run_manifest.json` with the resolved config,
-epoch plans, RNG stream assignments, and planned/actual step counts.
+Training randomness is split into independent streams for per-epoch subsampling,
+negative sampling, and per-epoch context windows. Linear LR decay follows
+in-vocabulary source-token progress, so randomized pair cardinality never changes
+the schedule denominator. The engine rereads the corpus per epoch and keeps only
+one sentence plus a bounded example batch. Successful runs write
+`run_manifest.json` with token progress, stream statistics, RNG assignments,
+and peak buffered examples.
 
 See [training-plan.md](training-plan.md) for the invariants and rationale.
