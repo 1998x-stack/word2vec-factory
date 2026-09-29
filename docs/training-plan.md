@@ -51,9 +51,9 @@ The trainer derives independent NumPy generators from the configured root
 
 | Stream | Purpose | Lifetime |
 | --- | --- | --- |
-| 1 + epoch | frequent-word subsampling | recreated per epoch |
+| 1, keyed by epoch | frequent-word subsampling | recreated per epoch |
 | 2 | negative sampling | full training run |
-| 3 + epoch | context-window sampling | recreated per epoch |
+| 3, keyed by epoch | context-window sampling | recreated per epoch |
 
 The same epoch seed is replayable, while different epochs receive independent
 subsampling/window streams. Extra negative-sampling draws cannot perturb positive
