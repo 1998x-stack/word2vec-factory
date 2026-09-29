@@ -32,7 +32,7 @@ clarity; the registry keeps new components easy to add and ablate.
 pass 1: raw text files
    │  iter_tokens()                      (line-by-line)
    ▼
-build_vocab()                            (counts + min_count/max_vocab)
+build_vocab()                            (counts + token-stream SHA-256)
    │
    ├── compute_discard_probs()
    └── build_training_plan()             (token-progress denominator)
@@ -76,7 +76,8 @@ Training randomness is split into independent streams for per-epoch subsampling,
 negative sampling, and per-epoch context windows. Linear LR decay follows
 in-vocabulary source-token progress, so randomized pair cardinality never changes
 the schedule denominator. The engine rereads the corpus per epoch and keeps only
-one sentence plus a bounded example batch. Successful runs write
+one sentence plus a bounded example batch. Each epoch also recomputes the
+token-stream fingerprint to detect corpus/tokenizer drift. Successful runs write
 `run_manifest.json` with token progress, stream statistics, RNG assignments,
 and peak buffered examples.
 
