@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -61,6 +62,9 @@ class Cfg:
     EVAL: EvalCfg = field(default_factory=EvalCfg)
 
 
+_TOP_LEVEL_FIELDS = {"SEED", "RUN", "DATA", "TRAIN", "MODEL", "EVAL"}
+
+
 def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     for k, v in b.items():
         if isinstance(v, dict) and k in a and isinstance(a[k], dict):
@@ -70,35 +74,77 @@ def _merge(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return a
 
 
-def load_cfg(path: str) -> Cfg:
-    with open(path, encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
-    if "INCLUDE" in raw and raw["INCLUDE"]:
-        base = load_cfg(raw["INCLUDE"])
-        base_d = _to_dict(base)
-        merged = _merge(base_d, {k: v for k, v in raw.items() if k != "INCLUDE"})
-        return _from_dict(merged)
-    return _from_dict(raw)
+def _require_mapping(value: Any, section: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{section} must be a mapping")
+    if any(not isinstance(k, str) for k in value):
+        raise ValueError(f"{section} keys must be strings")
+    return value
+
+
+def _assert_known_keys(section: str, dct: dict[str, Any], allowed: set[str]) -> None:
+    unknown = sorted(set(dct) - allowed)
+    if unknown:
+        joined = ", ".join(unknown)
+        raise ValueError(f"Unknown {section} config key(s): {joined}")
+
+
+def _strict_kwargs(cls, value: Any, section: str) -> dict[str, Any]:
+    dct = _require_mapping(value, section)
+    allowed = {f.name for f in dataclasses.fields(cls)}
+    _assert_known_keys(section, dct, allowed)
+    return dict(dct)
+
+
+def load_cfg(path: str, *, _stack: tuple[Path, ...] = ()) -> Cfg:
+    cfg_path = Path(path).expanduser().resolve()
+    if cfg_path in _stack:
+        chain = " -> ".join(str(p) for p in (*_stack, cfg_path))
+        raise ValueError(f"Cyclic config INCLUDE detected: {chain}")
+
+    with cfg_path.open(encoding="utf-8") as f:
+        raw = _require_mapping(yaml.safe_load(f), f"config {cfg_path}")
+
+    _assert_known_keys(f"top-level ({cfg_path})", raw, _TOP_LEVEL_FIELDS | {"INCLUDE"})
+    include = raw.get("INCLUDE")
+    overrides = {k: v for k, v in raw.items() if k != "INCLUDE"}
+
+    if include is None or include == "":
+        return _from_dict(overrides)
+    if not isinstance(include, str):
+        raise ValueError(f"INCLUDE in {cfg_path} must be a path string")
+
+    include_path = Path(include).expanduser()
+    if not include_path.is_absolute():
+        include_path = cfg_path.parent / include_path
+
+    base = load_cfg(str(include_path), _stack=(*_stack, cfg_path))
+    merged = _merge(_to_dict(base), overrides)
+    return _from_dict(merged)
 
 
 def _to_dict(cfg: Cfg) -> dict[str, Any]:
     return dataclasses.asdict(cfg)
 
 
-def _filter_kwargs(cls, dct: dict[str, Any]) -> dict[str, Any]:
-    """Strip unknown keys so configs don't crash on typos or moved fields."""
-    allowed = {f.name for f in dataclasses.fields(cls)}
-    return {k: v for k, v in dct.items() if k in allowed}
-
-
 def _from_dict(d: dict[str, Any]) -> Cfg:
-    run = RunCfg(**_filter_kwargs(RunCfg, d.get("RUN", {})))
+    root = _require_mapping(d, "config")
+    _assert_known_keys("top-level", root, _TOP_LEVEL_FIELDS)
 
-    data_kwargs = _filter_kwargs(DataCfg, d.get("DATA", {}))
+    run = RunCfg(**_strict_kwargs(RunCfg, root.get("RUN", {}), "RUN"))
+
+    data_kwargs = _strict_kwargs(DataCfg, root.get("DATA", {}), "DATA")
     data_kwargs["subsample_t"] = _coerce_t(data_kwargs.get("subsample_t"))
     data = DataCfg(**data_kwargs)
 
-    train = TrainCfg(**_filter_kwargs(TrainCfg, d.get("TRAIN", {})))
-    model = ModelCfg(**_filter_kwargs(ModelCfg, d.get("MODEL", {})))
-    eval_ = EvalCfg(**_filter_kwargs(EvalCfg, d.get("EVAL", {})))
-    return Cfg(SEED=d.get("SEED", 42), RUN=run, DATA=data, TRAIN=train, MODEL=model, EVAL=eval_)
+    train = TrainCfg(**_strict_kwargs(TrainCfg, root.get("TRAIN", {}), "TRAIN"))
+    model = ModelCfg(**_strict_kwargs(ModelCfg, root.get("MODEL", {}), "MODEL"))
+    eval_ = EvalCfg(**_strict_kwargs(EvalCfg, root.get("EVAL", {}), "EVAL"))
+
+    seed = root.get("SEED", 42)
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("SEED must be an integer")
+
+    return Cfg(SEED=seed, RUN=run, DATA=data, TRAIN=train, MODEL=model, EVAL=eval_)
