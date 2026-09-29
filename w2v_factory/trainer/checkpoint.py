@@ -102,6 +102,11 @@ def training_signature(cfg) -> str:
     if run:
         data["RUN"] = run
     data.pop("EVAL", None)
+    data_cfg = data.get("DATA")
+    if isinstance(data_cfg, dict):
+        # Corpus identity is validated by its token-stream fingerprint, so the
+        # same corpus may be relocated without invalidating a checkpoint.
+        data_cfg.pop("input_files", None)
     encoded = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
