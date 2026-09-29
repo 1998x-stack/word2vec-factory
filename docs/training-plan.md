@@ -65,10 +65,11 @@ identity across PyTorch versions, devices, or kernels.
 
 ## Drift detection
 
-The vocabulary pass records the expected number of in-vocabulary source tokens.
-Every training epoch counts those tokens again while streaming. A mismatch raises
-an explicit corpus/tokenizer drift error rather than silently training with a
-different LR denominator.
+The vocabulary pass records both the expected in-vocabulary token mass and an
+incremental SHA-256 fingerprint of the exact tokenized sentence stream. Every
+training epoch recomputes both while streaming. Count mismatches can fail early;
+the final fingerprint also catches equal-count substitutions, reordering, OOV
+changes, and tokenizer-output changes without storing the corpus.
 
 ## Run manifest
 
@@ -77,7 +78,7 @@ Every successful run writes `run_manifest.json` beside the vectors. It records:
 - the fully resolved dataclass configuration;
 - the token-progress training plan;
 - RNG stream assignments;
-- corpus-pass count and streaming memory mode;
+- corpus-pass count, streaming memory mode, and corpus SHA-256;
 - per-epoch source, retained-token, example, and optimizer-step counters;
 - peak buffered examples;
 - selected device and final LR.
