@@ -1,7 +1,7 @@
 # Configuration reference
 
 All run-level settings live in YAML and are loaded by `w2v_factory.config.load_cfg`.
-A config can `INCLUDE` another file to inherit and override it.
+A config can `INCLUDE` another file to inherit and override it. Relative include paths are resolved from the child config's directory, include cycles are rejected, and unknown keys fail fast instead of being silently ignored.
 
 ## Top-level
 
