@@ -68,11 +68,12 @@ def load_checkpoint(path: str | Path, map_location: torch.device | str) -> dict[
         raise CheckpointError(f"Checkpoint not found: {checkpoint}")
 
     sidecar = checkpoint.with_suffix(checkpoint.suffix + ".sha256")
-    if sidecar.is_file():
-        expected = sidecar.read_text(encoding="utf-8").strip()
-        actual = _sha256_file(checkpoint)
-        if expected != actual:
-            raise CheckpointError(f"Checkpoint SHA-256 mismatch: {checkpoint}")
+    if not sidecar.is_file():
+        raise CheckpointError(f"Checkpoint SHA-256 sidecar not found: {sidecar}")
+    expected = sidecar.read_text(encoding="utf-8").strip()
+    actual = _sha256_file(checkpoint)
+    if expected != actual:
+        raise CheckpointError(f"Checkpoint SHA-256 mismatch: {checkpoint}")
 
     try:
         payload = torch.load(checkpoint, map_location=map_location, weights_only=False)
