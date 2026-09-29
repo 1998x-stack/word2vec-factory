@@ -35,6 +35,20 @@ class AliasSampler:
         for idx in small + large:
             self.q[idx] = 1.0
 
+    def get_rng_state(self) -> dict | None:
+        if self.rng is None:
+            return None
+        return self.rng.bit_generator.state
+
+    def set_rng_state(self, state: dict | None) -> None:
+        if state is None:
+            if self.rng is not None:
+                raise ValueError("Checkpoint is missing AliasSampler RNG state")
+            return
+        if self.rng is None:
+            raise ValueError("AliasSampler has no generator to restore")
+        self.rng.bit_generator.state = state
+
     def sample(self, size: int) -> np.ndarray:
         if size < 0:
             raise ValueError("sample size must be non-negative")

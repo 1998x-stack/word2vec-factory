@@ -15,6 +15,8 @@ A config can `INCLUDE` another file to inherit and override it. Relative include
 | --- | --- | --- |
 | `out_dir` | `runs/exp1` | output directory for vectors + logs |
 | `tb` | `true` | write TensorBoard logs |
+| `checkpoint_every_epochs` | `null` | save an atomic checkpoint every N completed epochs; positive integer |
+| `resume_from` | `null` | trusted epoch-boundary checkpoint path to restore |
 
 ## `DATA`
 
