@@ -10,9 +10,13 @@ def test_inner_nodes_and_path_lengths():
     paths, codes = build_huffman_codes(counts)
     V = len(counts)
     assert len(paths) == V and len(codes) == V
+    used_nodes = set()
     for p, c in zip(paths, codes, strict=True):
         assert len(p) == len(c)  # one code bit per tree edge
         assert len(p) >= 1  # every word has a non-empty path
+        assert all(0 <= node < V - 1 for node in p)
+        used_nodes.update(p)
+    assert used_nodes == set(range(V - 1))
 
 
 def test_unique_prefix_free_codes():

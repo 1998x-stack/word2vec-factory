@@ -1,4 +1,4 @@
-INCLUDE: configs/base.yaml
+INCLUDE: base.yaml
 MODEL:
   arch: cbow
   loss: hs

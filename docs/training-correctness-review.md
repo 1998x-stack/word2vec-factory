@@ -4,8 +4,9 @@
 
 1. **Skip-gram + HS target mismatch (fixed in this PR).** The old training loop discarded the context component of each `(center, context)` pair and packed the Huffman code for the center. Correct Skip-gram uses the center embedding as input and the **context word** as the prediction target. The regression test captures IDs passed into the HS packer.
 2. **Negative-sampling false negatives (fixed in this PR).** A single redraw after a positive/negative collision does not ensure the redraw differs from the positive. Batched rejection sampling now retries until every row excludes its positive. A one-word vocabulary with a forbidden positive is rejected.
-3. **HS Python-loop overhead (partially addressed).** Skip-gram HS computes all path scores in one masked tensor operation. CBOW HS still has a per-example loop; vectorizing it is a separate optimization, with numerical and gradient equivalence tests required.
-4. **Training-data memory (partially addressed).** The old engine allocated all epoch pairs; the revised engine produces pairs lazily in batches. The encoded corpus is still materialized in RAM, so this is not a streaming-corpus implementation.
+3. **HS Python-loop overhead (addressed 2026-09-29).** Skip-gram and CBOW HS now compute path scores with masked tensor operations. CBOW has a scalar-reference regression test that checks both loss and gradients.
+4. **HS output-table memory (addressed 2026-09-29).** Huffman paths now use compact internal-node IDs, so HS allocates `V-1` output vectors instead of `2V-1`.
+5. **Training-data memory (partially addressed).** The old engine allocated all epoch pairs; the revised engine produces pairs lazily in batches. The encoded corpus is still materialized in RAM, so this is not a streaming-corpus implementation.
 
 ## Validation gates
 
@@ -21,4 +22,4 @@
 
 Skip-gram NS previously globally shuffled the materialized epoch pairs. The bounded generator now emits pairs in corpus order with random local context windows. This reduces peak pair-list memory but changes the sample-order distribution. Do not attribute changes in final accuracy solely to the correctness fix without controlling this difference.
 
-Future work should be isolated into independently tested PRs: true streaming corpus ingestion and memory benchmarking; exact step/token accounting for linear LR decay; config schema/relative INCLUDE path validation; vectorized CBOW HS; CPU/CUDA numerical reproducibility policy and experiments; checkpoint/resume and export metadata. A fixed seed alone does not guarantee bit-for-bit identical results across PyTorch versions, platforms and CPU/GPU backends (see PyTorch's reproducibility notes).
+Future work should be isolated into independently tested PRs: true streaming corpus ingestion and memory benchmarking; exact step/token accounting for linear LR decay; CPU/CUDA numerical reproducibility policy and experiments; checkpoint/resume and export metadata. A fixed seed alone does not guarantee bit-for-bit identical results across PyTorch versions, platforms and CPU/GPU backends (see PyTorch's reproducibility notes).

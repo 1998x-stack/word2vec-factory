@@ -1,7 +1,7 @@
 # Configuration reference
 
 All run-level settings live in YAML and are loaded by `w2v_factory.config.load_cfg`.
-A config can `INCLUDE` another file to inherit and override it.
+A config can `INCLUDE` another file to inherit and override it. Relative include paths are resolved from the child config's directory, include cycles are rejected, and unknown keys fail fast instead of being silently ignored.
 
 ## Top-level
 
@@ -24,7 +24,7 @@ A config can `INCLUDE` another file to inherit and override it.
 | `lowercase` | `true` | lowercase tokens |
 | `min_count` | `5` | drop words in the corpus below this count |
 | `max_vocab` | `1000000` | cap vocabulary size |
-| `subsample_t` | `1e-5` | frequent-word subsample threshold; `null`/`'null'` disables |
+| `subsample_t` | `1e-5` | frequent-word subsample threshold; `null`, `false`, or `0` disables; invalid/negative values fail fast |
 | `tokenizer` | `simple` | tokenizer name (`simple`) |
 | `max_sent_len` | `10000` | truncate over-long lines |
 

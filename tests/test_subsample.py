@@ -4,7 +4,7 @@ import pytest
 from w2v_factory.data.subsample import _coerce_t, compute_discard_probs
 
 
-@pytest.mark.parametrize("v", [None, "null", "None", "false", "", "0"])
+@pytest.mark.parametrize("v", [None, "null", "None", "false", "", "0", "0.0", 0, 0.0, False])
 def test_coerce_null_variants(v):
     assert _coerce_t(v) is None
 
@@ -35,3 +35,9 @@ def test_discard_string_t_matches_float_t():
     p_num = compute_discard_probs(counts, total, 1e-5)
     p_str = compute_discard_probs(counts, total, "1e-5")
     np.testing.assert_allclose(p_num, p_str)
+
+
+@pytest.mark.parametrize("v", ["not-a-number", -1e-5, float("nan"), float("inf"), True])
+def test_coerce_rejects_invalid_values(v):
+    with pytest.raises(ValueError, match="subsample_t|Invalid"):
+        _coerce_t(v)

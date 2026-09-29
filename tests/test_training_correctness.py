@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from w2v_factory.config import Cfg, DataCfg, ModelCfg, RunCfg, TrainCfg
 from w2v_factory.losses.negative_sampling import draw_negatives
+from w2v_factory.models.cbow import CBOW
 from w2v_factory.models.skipgram import SkipGram
 from w2v_factory.trainer import engine
 
@@ -65,9 +66,9 @@ def test_skipgram_hs_uses_context_word_paths(tmp_path, monkeypatch):
 
 def test_skipgram_hs_matches_masked_scalar_reference_and_gradients():
     torch.manual_seed(0)
-    model = SkipGram(vocab_size=4, dim=3, out_vocab_size=7)
+    model = SkipGram(vocab_size=4, dim=3, out_vocab_size=3)
     centers = torch.tensor([0, 1, 2])
-    paths = torch.tensor([[4, 5], [6, 0], [4, 6]])
+    paths = torch.tensor([[0, 1], [2, 0], [0, 2]])
     codes = torch.tensor([[0, 1], [1, 0], [1, 0]])
     lengths = torch.tensor([2, 1, 2])
 
@@ -78,6 +79,34 @@ def test_skipgram_hs_matches_masked_scalar_reference_and_gradients():
         nodes = model.out_embed(paths[i, : lengths[i]])
         signs = 2 * codes[i, : lengths[i]].float() - 1
         reference_terms.append(-F.logsigmoid(signs * (nodes * center).sum(dim=1)).sum())
+    reference_loss = torch.stack(reference_terms).mean()
+    torch.testing.assert_close(vector_loss, reference_loss)
+
+    reference_grads = torch.autograd.grad(
+        reference_loss, (model.in_embed.weight, model.out_embed.weight), retain_graph=True
+    )
+    vector_grads = torch.autograd.grad(vector_loss, (model.in_embed.weight, model.out_embed.weight))
+    for actual, expected in zip(vector_grads, reference_grads):
+        torch.testing.assert_close(actual, expected)
+
+
+def test_cbow_hs_matches_masked_scalar_reference_and_gradients():
+    torch.manual_seed(0)
+    model = CBOW(vocab_size=5, dim=3, out_vocab_size=4)
+    contexts = torch.tensor([[0, 1, 4], [1, 2, 3], [3, 4, 0]])
+    context_lens = torch.tensor([2, 3, 2])
+    paths = torch.tensor([[0, 1, 2], [3, 0, 0], [1, 2, 0]])
+    codes = torch.tensor([[0, 1, 1], [1, 0, 0], [1, 0, 0]])
+    path_lens = torch.tensor([3, 1, 2])
+
+    vector_loss = model.forward_hs(contexts, context_lens, paths, codes, path_lens).loss
+
+    reference_terms = []
+    for i in range(len(contexts)):
+        mean_ctx = model.in_embed(contexts[i, : context_lens[i]]).mean(dim=0)
+        nodes = model.out_embed(paths[i, : path_lens[i]])
+        signs = 2 * codes[i, : path_lens[i]].float() - 1
+        reference_terms.append(-F.logsigmoid(signs * (nodes * mean_ctx).sum(dim=1)).sum())
     reference_loss = torch.stack(reference_terms).mean()
     torch.testing.assert_close(vector_loss, reference_loss)
 
