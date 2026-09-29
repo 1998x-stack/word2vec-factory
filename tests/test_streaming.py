@@ -127,6 +127,8 @@ def test_corpus_drift_after_vocab_build_is_rejected(tmp_path):
     cfg = _tiny_cfg(corpus, tmp_path / "run", epochs=1)
     trainer = Trainer(cfg)
 
-    corpus.write_text("alpha beta gamma alpha beta\n" * 2, encoding="utf-8")
-    with pytest.raises(RuntimeError, match="drift"):
+    # Same vocabulary and counts, different token order: token-mass checks alone
+    # cannot detect this, but the streaming fingerprint must.
+    corpus.write_text("gamma beta alpha\n" * 2, encoding="utf-8")
+    with pytest.raises(RuntimeError, match="fingerprint"):
         trainer._train_epoch(step0=0, epoch=0)
