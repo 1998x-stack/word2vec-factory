@@ -21,7 +21,7 @@ from ..models.cbow import CBOW
 from ..models.skipgram import SkipGram
 from ..trainer.exporter import save_json, save_numpy, save_word2vec_txt
 from ..trainer.lr_schedulers import get_scheduler
-from ..trainer.planning import EpochPlan, build_epoch_plans, pair_rng
+from ..trainer.planning import PAIR_RNG_STREAM, EpochPlan, build_epoch_plans, pair_rng
 from ..utils import make_numpy_rng, pick_device, set_seed
 
 SUBSAMPLE_RNG_STREAM = 1
@@ -178,7 +178,7 @@ class Trainer:
                 "subsampling": SUBSAMPLE_RNG_STREAM,
                 "negative_sampling": NEGATIVE_RNG_STREAM,
                 "context_windows": {
-                    "stream": 3,
+                    "stream": PAIR_RNG_STREAM,
                     "per_epoch": True,
                 },
             },
