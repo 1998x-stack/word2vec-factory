@@ -136,7 +136,8 @@ def _from_dict(d: dict[str, Any]) -> Cfg:
     run = RunCfg(**_strict_kwargs(RunCfg, root.get("RUN", {}), "RUN"))
 
     data_kwargs = _strict_kwargs(DataCfg, root.get("DATA", {}), "DATA")
-    data_kwargs["subsample_t"] = _coerce_t(data_kwargs.get("subsample_t"))
+    if "subsample_t" in data_kwargs:
+        data_kwargs["subsample_t"] = _coerce_t(data_kwargs["subsample_t"])
     data = DataCfg(**data_kwargs)
 
     train = TrainCfg(**_strict_kwargs(TrainCfg, root.get("TRAIN", {}), "TRAIN"))
