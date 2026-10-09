@@ -7,7 +7,7 @@ A config can `INCLUDE` another file to inherit and override it. Relative include
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `SEED` | `42` | global random seed |
+| `SEED` | `42` | non-negative root seed used to derive independent training RNG streams |
 
 ## `RUN`
 

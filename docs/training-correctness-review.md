@@ -7,6 +7,8 @@
 3. **HS Python-loop overhead (addressed 2026-09-29).** Skip-gram and CBOW HS now compute path scores with masked tensor operations. CBOW has a scalar-reference regression test that checks both loss and gradients.
 4. **HS output-table memory (addressed 2026-09-29).** Huffman paths now use compact internal-node IDs, so HS allocates `V-1` output vectors instead of `2V-1`.
 5. **Training-data memory (partially addressed).** The old engine allocated all epoch pairs; the revised engine produces pairs lazily in batches. The encoded corpus is still materialized in RAM, so this is not a streaming-corpus implementation.
+6. **LR step accounting (addressed 2026-09-29).** Training now builds an exact per-epoch example/optimizer-step plan and asserts actual steps match it. Linear LR decay no longer depends on an architecture-agnostic approximation.
+7. **NumPy RNG coupling (addressed 2026-09-29).** Subsampling, negative sampling, and per-epoch context windows use independent deterministic streams; extra draws in one component no longer perturb another component's training trajectory.
 
 ## Validation gates
 
@@ -22,4 +24,4 @@
 
 Skip-gram NS previously globally shuffled the materialized epoch pairs. The bounded generator now emits pairs in corpus order with random local context windows. This reduces peak pair-list memory but changes the sample-order distribution. Do not attribute changes in final accuracy solely to the correctness fix without controlling this difference.
 
-Future work should be isolated into independently tested PRs: true streaming corpus ingestion and memory benchmarking; exact step/token accounting for linear LR decay; CPU/CUDA numerical reproducibility policy and experiments; checkpoint/resume and export metadata. A fixed seed alone does not guarantee bit-for-bit identical results across PyTorch versions, platforms and CPU/GPU backends (see PyTorch's reproducibility notes).
+Future work should be isolated into independently tested PRs: true streaming corpus ingestion and memory benchmarking; token-level progress accounting if streaming changes epoch cardinality; CPU/CUDA numerical reproducibility policy and experiments; checkpoint/resume. A fixed seed alone does not guarantee bit-for-bit identical results across PyTorch versions, platforms and CPU/GPU backends (see PyTorch's reproducibility notes).

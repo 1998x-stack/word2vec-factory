@@ -6,10 +6,17 @@ import numpy as np
 class AliasSampler:
     """Alias method for efficient discrete sampling."""
 
-    def __init__(self, probs: np.ndarray) -> None:
+    def __init__(self, probs: np.ndarray, rng: np.random.Generator | None = None) -> None:
+        probs = np.asarray(probs, dtype=np.float64)
+        if probs.ndim != 1 or probs.size == 0:
+            raise ValueError("AliasSampler requires a non-empty 1-D probability vector")
+        if np.any(probs < 0) or not np.isfinite(probs).all() or probs.sum() <= 0:
+            raise ValueError("AliasSampler probabilities must be finite, non-negative, and have positive mass")
+
         n = len(probs)
         probs = probs / probs.sum()
         self.n = n
+        self.rng = rng
         self.q = np.zeros(n, dtype=np.float64)
         self.J = np.zeros(n, dtype=np.int32)
         small, large = [], []
@@ -25,19 +32,29 @@ class AliasSampler:
                 small.append(big)
             else:
                 large.append(big)
-        # remain qs are 1.0
+        for idx in small + large:
+            self.q[idx] = 1.0
 
     def sample(self, size: int) -> np.ndarray:
-        kk = np.random.randint(0, self.n, size=size)
-        uu = np.random.rand(size)
+        if size < 0:
+            raise ValueError("sample size must be non-negative")
+        if self.rng is None:
+            kk = np.random.randint(0, self.n, size=size)
+            uu = np.random.rand(size)
+        else:
+            kk = self.rng.integers(0, self.n, size=size)
+            uu = self.rng.random(size)
         use_k = uu < self.q[kk]
-        out = np.where(use_k, kk, self.J[kk])
-        return out
+        return np.where(use_k, kk, self.J[kk])
 
 
-def build_unigram_sampler(counts: list[int], power: float = 0.75) -> AliasSampler:
+def build_unigram_sampler(
+    counts: list[int],
+    power: float = 0.75,
+    rng: np.random.Generator | None = None,
+) -> AliasSampler:
     """构建 Unigram^0.75 的负采样分布。"""
     probs = np.asarray(counts, dtype=np.float64)
     probs = np.power(probs, power)
     probs = probs / probs.sum()
-    return AliasSampler(probs)
+    return AliasSampler(probs, rng=rng)
