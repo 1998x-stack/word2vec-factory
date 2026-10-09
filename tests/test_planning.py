@@ -1,51 +1,25 @@
-import math
-
 import pytest
 
-from w2v_factory.data.dataset import generate_cbow_pairs, generate_skipgram_pairs
+from w2v_factory.data.dataset import generate_skipgram_pairs
 from w2v_factory.data.sampler import build_unigram_sampler
-from w2v_factory.trainer.planning import build_epoch_plans, pair_rng
+from w2v_factory.trainer.planning import build_training_plan, pair_rng
 from w2v_factory.utils import make_numpy_rng
 
 
-def test_skipgram_plan_matches_replayed_window_stream():
-    sents = [[0, 1, 2, 3, 4], [4, 3, 2]]
-    plans = build_epoch_plans(
-        sents=sents,
-        arch="skipgram",
-        window=3,
-        batch_size=4,
-        epochs=3,
-        seed=17,
-    )
-
-    for plan in plans:
-        rng = pair_rng(17, plan.epoch)
-        actual_examples = sum(
-            len(list(generate_skipgram_pairs(sent, 3, rng=rng))) for sent in sents
-        )
-        assert plan.examples == actual_examples
-        assert plan.optimizer_steps == math.ceil(actual_examples / 4)
+def test_training_plan_uses_in_vocab_token_mass():
+    plan = build_training_plan([7, 3, 2], epochs=4)
+    assert plan.trainable_tokens_per_epoch == 12
+    assert plan.epochs == 4
+    assert plan.total_progress_tokens == 48
 
 
-def test_cbow_plan_matches_generated_target_count():
-    sents = [[0, 1, 2, 3], [3, 2]]
-    plans = build_epoch_plans(
-        sents=sents,
-        arch="cbow",
-        window=3,
-        batch_size=4,
-        epochs=2,
-        seed=23,
-    )
-
-    for plan in plans:
-        rng = pair_rng(23, plan.epoch)
-        actual_examples = sum(
-            len(list(generate_cbow_pairs(sent, 3, rng=rng))) for sent in sents
-        )
-        assert plan.examples == actual_examples == 6
-        assert plan.optimizer_steps == 2
+def test_pair_rng_is_replayable_per_epoch():
+    sent = list(range(12))
+    first = list(generate_skipgram_pairs(sent, 4, rng=pair_rng(5, 2)))
+    replay = list(generate_skipgram_pairs(sent, 4, rng=pair_rng(5, 2)))
+    other_epoch = list(generate_skipgram_pairs(sent, 4, rng=pair_rng(5, 3)))
+    assert first == replay
+    assert first != other_epoch
 
 
 def test_negative_sampling_does_not_perturb_window_stream():

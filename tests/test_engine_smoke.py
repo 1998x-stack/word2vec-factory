@@ -48,6 +48,10 @@ def test_train_smoke(tmp_path, arch, loss):
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     runtime = manifest["runtime"]
-    assert runtime["planned_optimizer_steps"] == runtime["actual_optimizer_steps"]
+    plan = manifest["training_plan"]
+    assert runtime["memory_mode"] == "streaming"
+    assert runtime["corpus_passes"] == 2
     assert runtime["actual_optimizer_steps"] > 0
-    assert len(runtime["epoch_plans"]) == 1
+    assert runtime["peak_buffer_examples"] <= cfg.TRAIN.batch_size
+    assert len(runtime["epoch_stats"]) == 1
+    assert runtime["epoch_stats"][0]["trainable_tokens"] == plan["trainable_tokens_per_epoch"]

@@ -60,8 +60,8 @@ def test_skipgram_hs_uses_context_word_paths(tmp_path, monkeypatch):
         return original(word_ids, paths, codes)
 
     monkeypatch.setattr(engine, "pack_hs_batch", capture_target_ids)
-    trainer._train_epoch([[0, 1, 2]], step0=0)
-    assert packed_target_ids == [1, 0, 2, 1]
+    trainer._train_epoch(step0=0, epoch=0)
+    assert packed_target_ids == [1, 0, 2, 1] * 3
 
 
 def test_skipgram_hs_matches_masked_scalar_reference_and_gradients():

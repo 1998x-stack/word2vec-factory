@@ -15,6 +15,8 @@ A config can `INCLUDE` another file to inherit and override it. Relative include
 | --- | --- | --- |
 | `out_dir` | `runs/exp1` | output directory for vectors + logs |
 | `tb` | `true` | write TensorBoard logs |
+| `checkpoint_every_epochs` | `null` | save an atomic checkpoint every N completed epochs; positive integer |
+| `resume_from` | `null` | trusted epoch-boundary checkpoint path to restore |
 
 ## `DATA`
 
@@ -33,9 +35,9 @@ A config can `INCLUDE` another file to inherit and override it. Relative include
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `epochs` | `10` | number of passes over the corpus |
-| `batch_size` | `1024` | number of target/completed examples per step |
+| `batch_size` | `1024` | maximum number of generated training examples buffered per optimizer step |
 | `lr` | `0.025` | learning rate |
-| `lr_schedule` | `linear` | `linear` or `none` |
+| `lr_schedule` | `linear` | `linear` decays by in-vocabulary source-token progress; `none` keeps LR fixed |
 | `optimizer` | `sgd` | `sgd` or `adam` |
 | `device` | `auto` | `auto`, `cpu`, or `cuda:N` |
 

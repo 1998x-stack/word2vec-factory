@@ -16,3 +16,17 @@ def test_max_vocab_limits():
     stream = [["a"], ["b"], ["c"], ["d"]]
     v = build_vocab(stream, min_count=1, max_vocab=2)
     assert v.size == 2
+
+
+def test_corpus_fingerprint_is_replayable_and_order_sensitive():
+    stream = [["a", "b"], ["c", "a"]]
+    same = [["a", "b"], ["c", "a"]]
+    reordered = [["b", "a"], ["c", "a"]]
+
+    a = build_vocab(stream, min_count=1, max_vocab=10)
+    b = build_vocab(same, min_count=1, max_vocab=10)
+    c = build_vocab(reordered, min_count=1, max_vocab=10)
+
+    assert a.corpus_sha256 == b.corpus_sha256
+    assert a.corpus_sha256 != c.corpus_sha256
+    assert a.sentences == 2
