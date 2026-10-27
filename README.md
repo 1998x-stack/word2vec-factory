@@ -85,7 +85,7 @@ python -m w2v_factory.cli.paper_ablate --suite configs/experiments/smoke.yaml --
 Experiments use real Factory registries for model/optimizer and experimental design, plus
 seed-matched one-factor controls or explicit factorial studies. The runner writes
 structured JSONL, category/coverage-aware analogy metrics, CSV/JSON/Markdown
-summaries and optional PNG/SVG plots. **Smoke scores are not the paper's scores**.
+summaries, seed-level bootstrap summaries and optional PNG/SVG plots. **Smoke scores are not the paper's scores**.
 The original 1301 paper predates the negative-sampling/subsampling extensions in 1310;
 they have separate configurations and evidence maps.
 

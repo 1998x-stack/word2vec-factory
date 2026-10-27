@@ -18,6 +18,7 @@ from ..log import setup_logging
 from ..trainer.engine import Trainer
 from .evaluation import read_analogies, read_embedding_words, score_analogies
 from .plan import Case
+from .statistics import aggregate_seed_results
 
 
 def write_json(path: Path, payload: dict | list) -> None:
@@ -209,6 +210,22 @@ def summarize_results(cases: list[Case], root: Path) -> list[dict]:
         "", "The 2013 paper's Google News/LDC data and DistBelief hardware are not bundled. "
         "The presence of an experiment here does not establish numerical reproduction.",
     ])
+    estimates = aggregate_seed_results(rows)
+    write_json(root / "aggregate.json", estimates)
+    lines.extend([
+        "", "## Across-seed estimates", "",
+        "Bootstrap 95% percentile intervals require at least three independent seeds; "
+        "intervals are exploratory, not proof of statistical significance.", "",
+    ])
+    for estimate in estimates:
+        stat = estimate["metrics"]["accuracy_covered"]
+        lines.append(
+            f"- {estimate['suite']}/{estimate['arm']}: "
+            f"n={stat['n']}, mean={_number(stat['mean'])}, "
+            f"sd={_number(stat['sd_sample'])}, "
+            f"paired_delta_mean={_number(stat['paired_delta_mean'])}, "
+            f"paired_delta_ci95={stat['paired_delta_ci95_bootstrap']}"
+        )
     (root / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     write_json(root / "summary.json", rows)
     return rows

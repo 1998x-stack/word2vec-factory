@@ -74,7 +74,7 @@ uncontrolled Cartesian product.
   existing completed output is reused only when hash and artifacts agree.
 - Each run has `experiment_metadata.json`, `run_manifest.json`, `embeddings.npy`,
   `embeddings.txt`, `case_result.json` and optionally `analogy_metrics.json`.
-- Suite root has `plan.json`, `events.jsonl`, `summary.csv`,
+- Suite root has `plan.json`, `events.jsonl`, `aggregate.json`, `summary.csv`,
   `summary.json`, `summary.md` and `plots/*.png|svg` if Matplotlib is installed.
 - Training has TensorBoard scalars and Loguru file logs from the original engine.
 - Histories from different GPU kernels, PyTorch versions and machines are not guaranteed bitwise identical.
