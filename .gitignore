@@ -11,3 +11,6 @@ runs/
 
 # Maintained as a separate nested Git repository.
 analysis_claude_code/
+
+# Research corpora and generated nested-prefix slices are external data.
+data/
