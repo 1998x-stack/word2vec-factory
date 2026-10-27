@@ -1,0 +1,12 @@
+# These are NOT mechanisms proposed by 1301.3781.
+# Negative sampling and frequent-word subsampling are from arXiv:1310.4546.
+base_cfg: paper1301_base.yaml
+out_root: runs/paper1301/extensions
+strategy: one_factor
+seeds: [11, 23, 37]
+max_runs: 100
+factors:
+  MODEL.loss: [hs, ns]
+  MODEL.ns_neg_k: [2, 5, 10]
+  MODEL.ns_power: [0.5, 0.75, 1.0]
+  DATA.subsample_t: [null, 1.0e-5, 1.0e-4]
