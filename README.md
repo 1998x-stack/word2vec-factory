@@ -48,3 +48,11 @@ tensorboard --logdir runs/paper1301/ablations
 - [数值正确性审计](docs/training-correctness-review.md)
 - [训练规划](docs/training-plan.md)
 - [Checkpoint/Resume](docs/checkpoint-resume.md)
+
+
+## Paper Table 2 scaling sweep
+
+    python -m w2v_factory.cli.corpus_budget --input data/source.txt --out-dir data/paper1301_slices --budgets 24000000 49000000 98000000 196000000 391000000 783000000
+    python -m w2v_factory.cli.ablate --grid configs/paper1301_table2_grid.yaml --dry-run
+
+该预处理只创建可追溯 nested-prefix token budgets，绝不自动下载 Google News，真实原论文指标仍需要真实语料、算力及评测。

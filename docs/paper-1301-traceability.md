@@ -10,7 +10,7 @@
 | §3.1 Eq.(4) | CBOW：上下文词向量平均，无词序，历史4+未来4 | models/cbow.py；window=4、window_sampling=fixed | mean/sum 反事实消融，测试验证 padding 不改变均值 |
 | §3.2 Eq.(5) | Skip-gram：中心词预测邻词；R∼Uniform{1,...,C}，实验 C=10 | data/dataset.py；window=10、window_sampling=uniform | fixed/full-window 是对照，不属于原论文默认 SG |
 | §4.1 | 3CosAdd 排除输入词，5 种 semantic + 9 种 syntactic | experiments/evaluate.py | 分类 exact top-1 与 OOV eligibility |
-| §4.2 Table 2 | 维度 50/100/300/600 与词量 24M 至 783M 联合变化 | configs/paper1301_ablations.yaml | **维度已设计；词量受控切片尚未实现** |
+| §4.2 Table 2 | 维度 50/100/300/600 与词量 24M 至 783M 联合变化 | configs/paper1301_ablations.yaml | 维度×词量 nested-prefix 切片生成器 cli/corpus_budget.py + configs/paper1301_table2_grid.yaml 已实现；**原始大规模数据及实测仍缺失** |
 | §4.2 | SGD，初始 LR=0.025，线性降低，3 epochs | configs/paper1301_base.yaml；trainer/lr_schedulers.py | 当前实现使用 token-progress decay；不等于逐步复刻原始实现 |
 | §4.3 Tables 3-5 | 模型/语义语法差异；1 vs 3 epochs；更多独立语料 vs 重复迭代 | experiments/plan.py、summary.py | 已设计受控消融；无真实结果则不下定论 |
 | §4.4 Table 6 | Google News 6B、多副本分布式 | **未实现** | 原文大型专有语料和硬件不可替代 |

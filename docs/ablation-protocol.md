@@ -36,3 +36,11 @@
 ## 正式验收
 
 执行全部测试、单次训练 sanity、dry-run 验证 run_id 稳定。之后运行真实语料，逐 seed 报告完整结果、置信区间与统计检验（样本量足够时才做推断）。禁止编造论文数值或通过 toy corpus 断言模型性能。对比不同 embedding 维度时应同时报告模型大小和实际训练成本。
+
+
+## Table 2：实际数据切片工具
+
+    python -m w2v_factory.cli.corpus_budget --input data/source.txt --out-dir data/paper1301_slices --budgets 24000000 49000000 98000000 196000000 391000000 783000000
+    python -m w2v_factory.cli.ablate --grid configs/paper1301_table2_grid.yaml --dry-run
+
+输出 budgets.json 包含源路径、tokenizer、原始读取次序、每个切片精确 token 数、sha256、句数。切片始终是**原始顺序前缀**，如果源文件存在时间/话题顺序偏差，应当先在外部固定种子打乱**文档顺序**并保存 provenance。预算边界可能截断最后一句。该数据分片器只能复现控制策略，不能替代原论文原始训练语料。

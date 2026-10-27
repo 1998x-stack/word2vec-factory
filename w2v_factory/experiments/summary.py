@@ -117,6 +117,31 @@ def generate_plots(root: str | Path) -> list[Path]:
         fig.savefig(dest, dpi=160)
         plt.close(fig)
         outputs.append(dest)
+    # Original Table 2 interaction: vocabulary/training tokens × dimension.
+    sizes = {r["raw_tokens"] for r in quality if r["raw_tokens"]}
+    dims = {r["dim"] for r in quality}
+    if len(sizes) > 1 and len(dims) > 1:
+        fig, ax = plt.subplots(figsize=(9, 5))
+        for dim in sorted(dims):
+            groups = defaultdict(list)
+            for row in quality:
+                if row["dim"] == dim and row["raw_tokens"] is not None:
+                    groups[row["raw_tokens"]].append(float(row["accuracy"]))
+            xs = sorted(groups)
+            ys = [float(np.mean(groups[n])) for n in xs]
+            se = [float(np.std(groups[n], ddof=1) / np.sqrt(len(groups[n])))
+                  if len(groups[n]) > 1 else 0.0 for n in xs]
+            ax.errorbar(xs, ys, yerr=se, marker="o", capsize=3, label=f"dim={dim}")
+        ax.set_xscale("log")
+        ax.set_xlabel("Train corpus tokens (nested prefixes; vocabulary may vary)")
+        ax.set_ylabel("3CosAdd eligible accuracy")
+        ax.set_title("Dimension × corpus-size scaling (mean ± seed SE)")
+        ax.legend()
+        fig.tight_layout()
+        dest = root / "table2_dimension_tokens.png"
+        fig.savefig(dest, dpi=160)
+        plt.close(fig)
+        outputs.append(dest)
     return outputs
 
 

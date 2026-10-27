@@ -18,7 +18,7 @@
 **验收：** 相同输入重复规划得到稳定 ID；零 eligible 不虚构准确率；报告只处理完成的运行。
 
 ## Stage 03 — 真实原论文表格复现（待外部语料）
-- 取得许可合规的训练语料与固定词表/预处理，准备 24M-783M nested token budgets。
+- 已提供 cli/corpus_budget.py 生成 24M-783M nested token budgets（带 SHA-256）；仍需取得许可合规的真实训练语料与固定词表/预处理。
 - 实施维度×数据量交互项；控制训练 tokens、unique tokens 和 epochs。
 - 固定评测集哈希，输出 semantic/syntactic 分项、覆盖率、误差估计和吞吐。
 **验收：** 不同设备实验分组，结果可复核，论文表格仅作外部参照而非替代测量。
