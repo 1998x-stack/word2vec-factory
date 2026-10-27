@@ -20,6 +20,9 @@ dependencies = [
   "tensorboard>=2.12.0"
 ]
 
+[project.optional-dependencies]
+viz = ["matplotlib>=3.7.0"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["w2v_factory*"]

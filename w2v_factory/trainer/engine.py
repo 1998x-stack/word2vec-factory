@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from dataclasses import asdict
@@ -285,6 +286,13 @@ class Trainer:
             completed_steps,
         )
 
+    def _metric_event(self, **fields: Any) -> None:
+        """Append bounded JSONL training metrics, without storing history in RAM."""
+        path = Path(self.cfg.RUN.out_dir) / "metrics.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(fields, sort_keys=True, default=str) + "\n")
+
     def _train_batch(
         self,
         payloads: list[Any],
@@ -323,6 +331,8 @@ class Trainer:
 
         if step % 200 == 0:
             value = result.loss.item()
+            self._metric_event(kind="train_step", step=step, loss=value, lr=lr_used,
+                               token_progress=progress_before_batch)
             logger.info(
                 "[{}-{}][step={}] loss={:.4f} lr={:.6g} token_progress={}/{}",
                 arch,
@@ -488,6 +498,11 @@ class Trainer:
                 )
                 step, stats = self._train_epoch(step, epoch)
                 self.epoch_stats.append(stats)
+                self._metric_event(kind="epoch", **asdict(stats))
+                if self.writer is not None:
+                    self.writer.add_scalar("epoch/examples", stats.examples, epoch + 1)
+                    self.writer.add_scalar("epoch/retained_tokens", stats.retained_tokens, epoch + 1)
+                    self.writer.add_scalar("epoch/optimizer_steps", stats.optimizer_steps, epoch + 1)
                 self.completed_steps = step
                 self.next_epoch = epoch + 1
 

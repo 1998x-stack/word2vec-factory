@@ -1,0 +1,9 @@
+# Extension baseline: every NS ablation hyperparameter must be active.
+INCLUDE: paper1301_base.yaml
+MODEL:
+  arch: skipgram
+  loss: ns
+  window: 10
+  window_sampling: uniform
+  ns_neg_k: 5
+  ns_power: 0.75

@@ -61,7 +61,7 @@ def evaluate_file(vectors: str | Path, questions: str | Path, lowercase: bool = 
                 continue
             for cdict in (groups[group], categories[category]):
                 cdict["eligible"] += 1
-            query = normalized[stoi[b]] - normalized[stoi[a]] + normalized[stoi[c]]
+            query = emb[stoi[b]] - emb[stoi[a]] + emb[stoi[c]]
             norm = np.linalg.norm(query)
             if norm <= 1e-12:
                 continue
