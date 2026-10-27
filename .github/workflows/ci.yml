@@ -22,6 +22,6 @@ jobs:
       - name: Compile package and tests
         run: python -m compileall -q w2v_factory tests
       - name: Lint paper experiment modules
-        run: ruff check w2v_factory/factory.py w2v_factory/experiments w2v_factory/cli/paper_ablate.py tests/test_paper_ablations.py tests/test_paper_protocol.py tests/test_paper_statistics.py
+        run: ruff check w2v_factory/factory.py w2v_factory/experiments w2v_factory/cli/paper_ablate.py tests/test_paper_ablations.py tests/test_paper_protocol.py tests/test_paper_statistics.py tests/test_paper_end_to_end.py
       - name: Run tests
         run: python -m pytest -q
