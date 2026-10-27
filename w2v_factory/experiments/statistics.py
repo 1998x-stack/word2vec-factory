@@ -1,8 +1,6 @@
 """Seed-level estimates for reproducible experiments; descriptive, not causal proof."""
 from __future__ import annotations
 
-from collections import defaultdict
-
 import numpy as np
 
 
@@ -36,10 +34,10 @@ def aggregate_seed_results(rows: list[dict]) -> list[dict]:
     Cross-suite results are not pooled since they can use different corpora or
     experimental protocols. The bootstrap is exploratory for small n.
     """
-    groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    groups: dict[tuple[str, str], list[dict]] = {}
     control: dict[tuple[str, int], dict] = {}
     for row in rows:
-        groups[(row["suite"], row["arm"])].append(row)
+        groups.setdefault((row["suite"], row["arm"]), []).append(row)
         if row["arm"] == "control":
             control[(row["suite"], row["seed"])] = row
 
