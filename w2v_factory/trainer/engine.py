@@ -472,6 +472,7 @@ class Trainer:
                 ),
                 "device": str(self.device),
                 "vocab_size": self.vocab.size,
+                "trainable_parameters": sum(p.numel() for p in self.model.parameters() if p.requires_grad),
                 "raw_tokens": self.vocab.total_tokens,
                 "source_sentences": self.vocab.sentences,
                 "corpus_sha256": self.vocab.corpus_sha256,

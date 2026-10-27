@@ -52,6 +52,7 @@ def test_train_smoke(tmp_path, arch, loss):
     assert runtime["memory_mode"] == "streaming"
     assert runtime["corpus_passes"] == 2
     assert runtime["actual_optimizer_steps"] > 0
+    assert runtime["trainable_parameters"] > 0
     assert runtime["peak_buffer_examples"] <= cfg.TRAIN.batch_size
     assert len(runtime["epoch_stats"]) == 1
     assert runtime["epoch_stats"][0]["trainable_tokens"] == plan["trainable_tokens_per_epoch"]

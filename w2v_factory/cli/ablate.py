@@ -4,7 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
+import subprocess
+import sys
 import time
+
+import numpy as np
+import torch
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +40,15 @@ def _event(root: Path, name: str, **values) -> None:
         }, ensure_ascii=False, default=str) + "\n")
 
 
+def _git_head() -> str | None:
+    try:
+        proc = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                              check=True, text=True, timeout=3)
+        return proc.stdout.strip() or None
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+
+
 def _run(root: Path, exp: Experiment, force: bool = False) -> str:
     out = Path(exp.cfg.RUN.out_dir)
     state_path = out / "experiment.json"
@@ -52,11 +67,18 @@ def _run(root: Path, exp: Experiment, force: bool = False) -> str:
     state = {
         "run_id": exp.run_id, "variant": exp.variant, "seed": exp.seed,
         "changes": exp.changes, "status": "running",
+        "environment": {
+            "python": sys.version.split()[0], "torch": str(torch.__version__),
+            "numpy": np.__version__, "platform": platform.platform(),
+            "git_head": _git_head(),
+        },
     }
     _write_json(state_path, state)
     start = time.perf_counter()
     try:
         trainer = Trainer(exp.cfg)
+        state["environment"]["device"] = str(trainer.device)
+        _write_json(state_path, state)
         trainer.train()
         state["wall_time_s"] = time.perf_counter() - start
         if exp.cfg.EVAL.analogy_file:

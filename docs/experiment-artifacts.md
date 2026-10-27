@@ -32,3 +32,6 @@ YAML -> EXPERIMENT_REG(one_factor/grid) -> validated Cfg -> TOKENIZER_REG -> MOD
     python -m w2v_factory.cli.report --root runs/paper1301/ablations
 
 注意：默认语料 sample_corpus.txt 只用于烟测。没有真实实验输出时报告“尚未实测”，不要生成假曲线。PNG 生成需 matplotlib 可选依赖。
+
+
+环境证据（environment）包括：Python、PyTorch、NumPy 版本、主机平台、可读取时的 Git SHA 及实际 device；run_manifest 还记录 trainable_parameters。论文复杂度 O=E×T×Q 属于理论模型，不能把吞吐率误写成完全同等硬件上的 FLOP/s。
