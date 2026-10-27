@@ -1,0 +1,75 @@
+# Source: arXiv:1301.3781 §§3-4, Tables 2-6.
+# Research replicas on YOUR corpus; paper's proprietary training data not supplied.
+base_cfg: configs/base.yaml
+out_root: runs/original-1301
+eval_file: questions-words.txt
+seeds: [42, 43, 44]
+max_cases: 90
+suites:
+  - id: cbow_dimension
+    source: original_1301
+    hypothesis: "Embedding dimension improves analogy accuracy, with diminishing returns."
+    design: one_factor
+    fixed:
+      MODEL.arch: cbow
+      MODEL.window_strategy: fixed
+      MODEL.loss: hs
+      MODEL.dim: 100
+      MODEL.window: 4
+      TRAIN.epochs: 3
+      DATA.subsample_t: null
+    axes:
+      MODEL.dim: [50, 100, 300, 600]
+  - id: skipgram_window
+    source: original_1301
+    hypothesis: "Larger maximum radius improves semantic analogies but increases compute."
+    design: one_factor
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: hs
+      MODEL.dim: 300
+      MODEL.window: 5
+      TRAIN.epochs: 3
+      DATA.subsample_t: null
+    axes:
+      MODEL.window: [2, 5, 10]
+  - id: architecture
+    source: original_1301
+    hypothesis: "Arch and window-selection policy interact; compare paper CBOW/fixed against Skipgram/random."
+    design: factorial
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: hs
+      MODEL.dim: 300
+      MODEL.window: 4
+      TRAIN.epochs: 3
+      DATA.subsample_t: null
+    axes:
+      MODEL.arch: [skipgram, cbow]
+      MODEL.window_strategy: [random, fixed]
+  - id: epoch_budget
+    source: original_1301
+    hypothesis: "Repeated passes have diminishing accuracy gains relative to their cost."
+    design: one_factor
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: hs
+      MODEL.dim: 300
+      MODEL.window: 5
+      TRAIN.epochs: 3
+      DATA.subsample_t: null
+    axes:
+      TRAIN.epochs: [1, 3, 5]
+  - id: dimension_arch_interaction
+    source: original_1301
+    hypothesis: "The marginal benefit of dimensionality depends on predictive architecture."
+    design: factorial
+    fixed:
+      MODEL.loss: hs
+      MODEL.window: 4
+      TRAIN.epochs: 3
+      DATA.subsample_t: null
+    axes:
+      MODEL.arch: [skipgram, cbow]
+      MODEL.dim: [50, 100, 300]
+      MODEL.window_strategy: [random, fixed]

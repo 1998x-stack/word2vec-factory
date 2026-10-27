@@ -1,0 +1,61 @@
+# Source: arXiv:1310.4546; extensions not claimed by arXiv:1301.3781.
+base_cfg: configs/base.yaml
+out_root: runs/followup-1310
+eval_file: questions-words.txt
+seeds: [42, 43, 44]
+max_cases: 90
+suites:
+  - id: hs_vs_ns
+    source: followup_1310
+    hypothesis: "NS vs HS changes compute and analogy accuracy with all other settings matched."
+    design: one_factor
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: hs
+      MODEL.dim: 300
+      TRAIN.epochs: 3
+    axes:
+      MODEL.loss: [hs, ns]
+  - id: subsampling
+    source: followup_1310
+    hypothesis: "Frequent-word subsampling changes throughput and learned relations."
+    design: one_factor
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: ns
+      MODEL.dim: 300
+      DATA.subsample_t: null
+    axes:
+      DATA.subsample_t: [null, 1.0e-5, 1.0e-4]
+  - id: negative_count
+    source: followup_1310
+    hypothesis: "Increasing the negative sample count can improve accuracy at higher cost."
+    design: one_factor
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: ns
+      MODEL.ns_neg_k: 5
+      MODEL.dim: 300
+    axes:
+      MODEL.ns_neg_k: [2, 5, 10, 15]
+  - id: negative_exponent
+    source: followup_1310
+    hypothesis: "Unigram exponent 0.75 changes representation relative to raw unigram."
+    design: one_factor
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: ns
+      MODEL.ns_power: 0.75
+      MODEL.dim: 300
+    axes:
+      MODEL.ns_power: [0.5, 0.75, 1.0]
+  - id: objective_arch_interaction
+    source: engineering
+    hypothesis: "Objective trade-offs depend on whether context is aggregated before prediction."
+    design: factorial
+    fixed:
+      MODEL.dim: 100
+      TRAIN.epochs: 3
+    axes:
+      MODEL.arch: [cbow, skipgram]
+      MODEL.loss: [hs, ns]

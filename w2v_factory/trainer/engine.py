@@ -20,10 +20,9 @@ from ..data.sampler import build_unigram_sampler
 from ..data.subsample import compute_discard_probs
 from ..data.text_reader import iter_tokens
 from ..data.vocab import TokenStreamFingerprint, Vocab, build_vocab
+from ..factory import make_model, make_optimizer
 from ..losses.hierarchical_softmax import pack_hs_batch
 from ..losses.negative_sampling import draw_negatives
-from ..models.cbow import CBOW
-from ..models.skipgram import SkipGram
 from ..trainer.checkpoint import (
     CHECKPOINT_FORMAT,
     CHECKPOINT_VERSION,
@@ -57,6 +56,10 @@ class Trainer:
             raise ValueError(f"Unsupported lr_schedule: {cfg.TRAIN.lr_schedule}")
         if cfg.MODEL.window <= 0 or cfg.MODEL.dim <= 0:
             raise ValueError("window and embedding dimension must be positive")
+        if cfg.MODEL.window_strategy not in {"random", "fixed"}:
+            raise ValueError("window_strategy must be random or fixed")
+        if not np.isfinite(cfg.MODEL.ns_power) or cfg.MODEL.ns_power <= 0:
+            raise ValueError("ns_power must be finite and positive")
         if cfg.MODEL.arch not in {"skipgram", "cbow"} or cfg.MODEL.loss not in {"ns", "hs"}:
             raise ValueError("Unsupported Word2Vec architecture or loss")
         if cfg.MODEL.loss == "ns" and cfg.MODEL.ns_neg_k <= 0:
@@ -97,6 +100,7 @@ class Trainer:
             self.vocab.counts,
             self.vocab.total_tokens,
             cfg.DATA.subsample_t,
+            formula=cfg.DATA.subsample_formula,
         )
 
         self.hs_paths: list[list[int]] | None = None
@@ -108,24 +112,20 @@ class Trainer:
         else:
             self.neg_sampler = build_unigram_sampler(
                 self.vocab.counts,
+                power=cfg.MODEL.ns_power,
                 rng=make_numpy_rng(cfg.SEED, NEGATIVE_RNG_STREAM),
             )
             out_nodes = self.vocab.size
 
-        model_type = SkipGram if cfg.MODEL.arch == "skipgram" else CBOW
-        self.model = model_type(
+        self.model = make_model(
+            cfg.MODEL.arch,
             vocab_size=self.vocab.size,
             dim=cfg.MODEL.dim,
             share_io=cfg.MODEL.share_input_output,
             out_vocab_size=out_nodes,
         ).to(self.device)
 
-        if cfg.TRAIN.optimizer == "sgd":
-            self.optim = torch.optim.SGD(self.model.parameters(), lr=cfg.TRAIN.lr)
-        elif cfg.TRAIN.optimizer == "adam":
-            self.optim = torch.optim.Adam(self.model.parameters(), lr=cfg.TRAIN.lr)
-        else:
-            raise ValueError(f"Unsupported optimizer: {cfg.TRAIN.optimizer}")
+        self.optim = make_optimizer(cfg.TRAIN.optimizer, params=self.model.parameters(), lr=cfg.TRAIN.lr)
 
         self.sched = get_scheduler(
             self.optim,
@@ -394,6 +394,7 @@ class Trainer:
                 positions,
                 self.cfg.MODEL.window,
                 rng=window_rng,
+                random_window=self.cfg.MODEL.window_strategy == "random",
             ):
                 global_progress = epoch_offset + sentence_base + sentence_progress
                 batch.append((payload, global_progress))

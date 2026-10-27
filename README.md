@@ -71,6 +71,24 @@ questions-words.txt Google analogy dataset
 - [Evaluation](docs/evaluation.md)
 - [From-scratch notes](docs/from-scratch.md)
 
+## Paper-grounded factory ablations
+
+[Original 1301 paper-to-code traceability](docs/papers/1301.3781-traceability.md) · [1310 extensions](docs/papers/1310.4546-extensions.md) · [controlled experiment protocol](docs/experiments/protocol.md) · [stage gates](docs/experiments/roadmap.md).
+
+```bash
+pip install -e '.[viz]'
+python -m w2v_factory.cli.paper_ablate --suite configs/experiments/smoke.yaml   # plan only
+python -m w2v_factory.cli.paper_ablate --suite configs/experiments/smoke.yaml --run
+python -m w2v_factory.cli.paper_ablate --suite configs/experiments/smoke.yaml --report-only
+```
+
+Experiments use real Factory registries for model/optimizer and experimental design, plus
+seed-matched one-factor controls or explicit factorial studies. The runner writes
+structured JSONL, category/coverage-aware analogy metrics, CSV/JSON/Markdown
+summaries and optional PNG/SVG plots. **Smoke scores are not the paper's scores**.
+The original 1301 paper predates the negative-sampling/subsampling extensions in 1310;
+they have separate configurations and evidence maps.
+
 ## Run artifacts
 
 A successful training run writes `embeddings.txt`, `embeddings.npy`, and
