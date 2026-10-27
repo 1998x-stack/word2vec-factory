@@ -82,3 +82,10 @@ token-stream fingerprint to detect corpus/tokenizer drift. Successful runs write
 and peak buffered examples.
 
 See [training-plan.md](training-plan.md) for the invariants and rationale.
+
+
+## 研究 Factory 扩展（2026-10）
+
+MODEL_REG 由 models/__init__.py 的 make_model() 创建具体架构；LOSS_REG 由 trainer/engine.py 选择 HS/NS 对应批次目标；SCHED_REG 由 trainer/lr_schedulers.py 管理 token-progress decay；TOKENIZER_REG 已由 data/text_reader.py 管理。experiments/plan.py 引入 EXPERIMENT_REG（one_factor/grid），构建基于相同 corpus、seed 的变化方案，实际优化逻辑仍由 Trainer 单一实现，杜绝各实验复制不同训练代码。
+
+对应论文条目见 paper-1301-traceability.md，输出日志和图表见 experiment-artifacts.md。

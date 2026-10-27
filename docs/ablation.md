@@ -1,35 +1,19 @@
-# Ablations
+# Ablations / 论文级消融
 
-Run ablations with a grid file. See `configs/ablation_grid.yaml`.
+- [论文逐节对应](paper-1301-traceability.md)
+- [研究设计与消融矩阵](ablation-protocol.md)
+- [日志及可视化](experiment-artifacts.md)
+- [分阶段复现任务](reproduction-roadmap.md)
 
-```yaml
-grid:
-  MODEL.arch: ["skipgram", "cbow"]
-  MODEL.loss: ["hs", "ns"]
-  MODEL.dim: [100, 300, 600]
-  MODEL.window: [5, 10]
-  TRAIN.epochs: [5, 10]
-  DATA.subsample_t: [null, 1e-5]
-base_cfg: configs/base.yaml
-out_root: runs/ablations
-```
+原有 configs/ablation_grid.yaml 的 grid 模式保持兼容；新增的 paper1301_ablations.yaml 采用 paired-seed one_factor，post2013_extensions.yaml 研究另一篇论文的 NS/subsampling。
 
-Run the grid (the cartesian product of every choice):
+先执行：
 
-```bash
-python -m w2v_factory.cli.ablate --grid configs/ablation_grid.yaml
-```
+    python -m w2v_factory.cli.ablate --grid configs/paper1301_ablations.yaml --dry-run
 
-Each combination runs the full training pipeline and writes vectors to:
+再在有真实语料及计算预算时执行：
 
-```
-runs/ablations/MODEL_arch=skipgram__MODEL_loss=hs__.../embeddings.txt
-```
+    python -m w2v_factory.cli.ablate --grid configs/paper1301_ablations.yaml --fail-fast
+    python -m w2v_factory.cli.report --root runs/paper1301/ablations
 
-The folder name encodes every varied key, so it is easy to compare runs.
-
-## Tips
-
-- Keep the base cfg fixed; point `base_cfg` at the config that sets `DATA.input_files`.
-- Set `DATA.subsample_t` to `null` in the grid when you want to disable it.
-- Evaluate each produced `embeddings.txt` with `scripts/eval_analogy.sh`.
+默认小语料仅用于验证程序，不能替代原论文结果。
