@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from w2v_factory.config import Cfg, DataCfg, EvalCfg, ModelCfg, RunCfg, TrainCfg
 from w2v_factory.experiments.plan import Case
 from w2v_factory.experiments.runner import run_case, summarize_results
@@ -59,3 +61,6 @@ def test_experiment_case_train_evaluate_reuse_and_report(tmp_path):
     assert (root / "aggregate.json").exists()
     events = [json.loads(s) for s in (root / "events.jsonl").read_text().splitlines()]
     assert [e["event"] for e in events] == ["started", "completed", "reused"]
+    corpus.write_text(corpus.read_text(encoding="utf-8") + "alpha beta\\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="corpus fingerprint changed"):
+        run_case(case, root, reuse=True)

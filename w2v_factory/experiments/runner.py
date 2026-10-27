@@ -14,6 +14,8 @@ import numpy as np
 import torch
 from loguru import logger
 
+from ..data.text_reader import iter_tokens
+from ..data.vocab import TokenStreamFingerprint
 from ..log import setup_logging
 from ..trainer.engine import Trainer
 from .evaluation import read_analogies, read_embedding_words, score_analogies
@@ -62,6 +64,24 @@ def case_metadata(case: Case) -> dict:
     }
 
 
+def _assert_corpus_unchanged(case: Case, out: Path) -> None:
+    """A config path is not a content identity; check tokenized corpus before reuse."""
+    manifest = json.loads((out / "run_manifest.json").read_text(encoding="utf-8"))
+    expected = manifest["runtime"]["corpus_sha256"]
+    fingerprint = TokenStreamFingerprint()
+    for tokens in iter_tokens(
+        case.cfg.DATA.input_files,
+        case.cfg.DATA.lowercase,
+        case.cfg.DATA.tokenizer,
+        case.cfg.DATA.max_sent_len,
+    ):
+        fingerprint.update(tokens)
+    if fingerprint.hexdigest() != expected:
+        raise ValueError(
+            f"Cannot reuse {out}: corpus fingerprint changed; investigate dataset drift"
+        )
+
+
 def run_case(case: Case, root: Path, *, reuse: bool = True, eval_batch_size: int = 16) -> dict:
     out = Path(case.cfg.RUN.out_dir)
     result_path = out / "case_result.json"
@@ -69,6 +89,7 @@ def run_case(case: Case, root: Path, *, reuse: bool = True, eval_batch_size: int
         saved = json.loads(result_path.read_text(encoding="utf-8"))
         if (saved.get("config_hash") == case.config_hash and saved.get("status") == "completed"
                 and (out / "run_manifest.json").exists() and (out / "embeddings.npy").exists()):
+            _assert_corpus_unchanged(case, out)
             append_event(root, event="reused", case=case)
             return saved
         raise ValueError(f"Output exists but does not match completed case: {out}; inspect before re-running")

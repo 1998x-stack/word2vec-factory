@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 METRICS = (
     "accuracy_covered", "semantic_accuracy", "syntactic_accuracy",
     "accuracy_all", "coverage", "train_seconds", "tokens_per_second",

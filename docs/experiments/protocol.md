@@ -71,7 +71,7 @@ uncontrolled Cartesian product.
 ## Reproducibility/known limitations
 
 - Case IDs/hash include model/data/train/eval settings and seed, excluding output directory;
-  existing completed output is reused only when hash and artifacts agree.
+  existing completed output is reused only when hash, artifacts and current corpus token-stream fingerprint agree.
 - Each run has `experiment_metadata.json`, `run_manifest.json`, `embeddings.npy`,
   `embeddings.txt`, `case_result.json` and optionally `analogy_metrics.json`.
 - Suite root has `plan.json`, `events.jsonl`, `aggregate.json`, `summary.csv`,
