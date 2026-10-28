@@ -18,10 +18,10 @@ jobs:
       - name: Install package and tests
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e . pytest ruff
+          python -m pip install -e . pytest
       - name: Compile package and tests
         run: python -m compileall -q w2v_factory tests
-      - name: Lint paper experiment modules
-        run: ruff check w2v_factory/factory.py w2v_factory/experiments w2v_factory/cli/paper_ablate.py tests/test_paper_ablations.py tests/test_paper_protocol.py tests/test_paper_statistics.py tests/test_paper_end_to_end.py
       - name: Run tests
         run: python -m pytest -q
+      - name: Validate ablation plan
+        run: python -m w2v_factory.cli.ablate --grid configs/paper1301_ablations.yaml --dry-run

@@ -40,9 +40,7 @@ def _coerce_t(t: Scalar) -> float | None:
     return value
 
 
-def compute_discard_probs(
-    counts: list[int], total_tokens: int, t: Scalar, *, formula: str = "legacy"
-) -> np.ndarray:
+def compute_discard_probs(counts: list[int], total_tokens: int, t: Scalar) -> np.ndarray:
     """计算 高频词 的丢弃概率（次采样）。
 
     Args:
@@ -53,8 +51,6 @@ def compute_discard_probs(
     Returns:
         与词表同长的丢弃概率向量（float32）。
     """
-    if formula not in {"legacy", "mikolov_1310"}:
-        raise ValueError(f"Unknown subsample formula: {formula}")
     t_val = _coerce_t(t)
     n = len(counts)
     if t_val is None or n == 0 or total_tokens <= 0:
@@ -62,9 +58,6 @@ def compute_discard_probs(
 
     freqs = np.asarray(counts, dtype=np.float64) / float(total_tokens)
     freqs = np.clip(freqs, 1e-12, None)  # 避免除零
-    keep = np.sqrt(t_val / freqs)
-    if formula == "mikolov_1310":
-        keep += t_val / freqs
-    p_discard = 1.0 - keep
+    p_discard = 1.0 - np.sqrt(t_val / freqs)
     p_discard = np.clip(p_discard, 0.0, 1.0)
     return p_discard.astype(np.float32)

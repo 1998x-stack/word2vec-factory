@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-viz = ["matplotlib>=3.7"]
+viz = ["matplotlib>=3.7.0"]
 
 [tool.setuptools.packages.find]
 where = ["."]

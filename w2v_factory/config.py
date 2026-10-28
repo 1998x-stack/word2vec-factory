@@ -25,7 +25,6 @@ class DataCfg:
     min_count: int = 5
     max_vocab: int = 1_000_000
     subsample_t: float | None = 1e-5
-    subsample_formula: str = "legacy"  # legacy | mikolov_1310
     tokenizer: str = "simple"
     max_sent_len: int = 10_000
 
@@ -45,11 +44,12 @@ class ModelCfg:
     arch: str = "skipgram"  # skipgram | cbow
     dim: int = 300
     window: int = 5
-    window_strategy: str = "random"  # random | fixed
     ns_neg_k: int = 5
-    ns_power: float = 0.75
     loss: str = "ns"  # ns | hs
     share_input_output: bool = False
+    window_sampling: str = "uniform"  # uniform | fixed
+    cbow_pooling: str = "mean"  # mean | sum
+    ns_power: float = 0.75
 
 
 @dataclass

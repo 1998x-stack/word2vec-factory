@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from dataclasses import asdict
@@ -20,9 +21,10 @@ from ..data.sampler import build_unigram_sampler
 from ..data.subsample import compute_discard_probs
 from ..data.text_reader import iter_tokens
 from ..data.vocab import TokenStreamFingerprint, Vocab, build_vocab
-from ..factory import make_model, make_optimizer
 from ..losses.hierarchical_softmax import pack_hs_batch
 from ..losses.negative_sampling import draw_negatives
+from ..models import make_model
+from ..registry import LOSS_REG
 from ..trainer.checkpoint import (
     CHECKPOINT_FORMAT,
     CHECKPOINT_VERSION,
@@ -43,6 +45,32 @@ SUBSAMPLE_RNG_STREAM = 1
 NEGATIVE_RNG_STREAM = 2
 
 
+@LOSS_REG.register("hs")
+def _forward_hs(trainer: "Trainer", inputs: torch.Tensor, target_ids: torch.Tensor,
+                lengths: torch.Tensor | None):
+    """Hierarchical-softmax objective factory: targets must be context words for SG."""
+    assert trainer.hs_paths is not None and trainer.hs_codes is not None
+    paths, codes, path_lens = pack_hs_batch(target_ids.cpu(), trainer.hs_paths, trainer.hs_codes)
+    paths, codes, path_lens = paths.to(trainer.device), codes.to(trainer.device), path_lens.to(trainer.device)
+    if trainer.cfg.MODEL.arch == "skipgram":
+        return trainer.model.forward_hs(inputs, paths, codes, path_lens)
+    assert lengths is not None
+    return trainer.model.forward_hs(inputs, lengths, paths, codes, path_lens)
+
+
+@LOSS_REG.register("ns")
+def _forward_ns(trainer: "Trainer", inputs: torch.Tensor, target_ids: torch.Tensor,
+                lengths: torch.Tensor | None):
+    """Negative-sampling objective factory: draw using the isolated sampler RNG."""
+    assert trainer.neg_sampler is not None
+    negatives = draw_negatives(trainer.neg_sampler, len(target_ids), trainer.cfg.MODEL.ns_neg_k,
+                               forbid=target_ids).to(trainer.device)
+    if trainer.cfg.MODEL.arch == "skipgram":
+        return trainer.model.forward_ns(inputs, target_ids, negatives)
+    assert lengths is not None
+    return trainer.model.forward_ns(inputs, lengths, target_ids, negatives)
+
+
 class Trainer:
     """Train CBOW or Skip-gram with bounded-memory streaming corpus passes."""
 
@@ -56,14 +84,16 @@ class Trainer:
             raise ValueError(f"Unsupported lr_schedule: {cfg.TRAIN.lr_schedule}")
         if cfg.MODEL.window <= 0 or cfg.MODEL.dim <= 0:
             raise ValueError("window and embedding dimension must be positive")
-        if cfg.MODEL.window_strategy not in {"random", "fixed"}:
-            raise ValueError("window_strategy must be random or fixed")
-        if not np.isfinite(cfg.MODEL.ns_power) or cfg.MODEL.ns_power <= 0:
-            raise ValueError("ns_power must be finite and positive")
         if cfg.MODEL.arch not in {"skipgram", "cbow"} or cfg.MODEL.loss not in {"ns", "hs"}:
             raise ValueError("Unsupported Word2Vec architecture or loss")
         if cfg.MODEL.loss == "ns" and cfg.MODEL.ns_neg_k <= 0:
             raise ValueError("ns_neg_k must be positive")
+        if cfg.MODEL.window_sampling not in {"fixed", "uniform"}:
+            raise ValueError("window_sampling must be fixed or uniform")
+        if cfg.MODEL.cbow_pooling not in {"mean", "sum"}:
+            raise ValueError("cbow_pooling must be mean or sum")
+        if not 0.0 < cfg.MODEL.ns_power <= 2.0:
+            raise ValueError("ns_power must lie in (0, 2]")
         cadence = cfg.RUN.checkpoint_every_epochs
         if cadence is not None and (
             not isinstance(cadence, int) or isinstance(cadence, bool) or cadence <= 0
@@ -100,7 +130,6 @@ class Trainer:
             self.vocab.counts,
             self.vocab.total_tokens,
             cfg.DATA.subsample_t,
-            formula=cfg.DATA.subsample_formula,
         )
 
         self.hs_paths: list[list[int]] | None = None
@@ -117,15 +146,22 @@ class Trainer:
             )
             out_nodes = self.vocab.size
 
+        model_kwargs = {"pooling": cfg.MODEL.cbow_pooling} if cfg.MODEL.arch == "cbow" else {}
         self.model = make_model(
             cfg.MODEL.arch,
             vocab_size=self.vocab.size,
             dim=cfg.MODEL.dim,
             share_io=cfg.MODEL.share_input_output,
             out_vocab_size=out_nodes,
+            **model_kwargs,
         ).to(self.device)
 
-        self.optim = make_optimizer(cfg.TRAIN.optimizer, params=self.model.parameters(), lr=cfg.TRAIN.lr)
+        if cfg.TRAIN.optimizer == "sgd":
+            self.optim = torch.optim.SGD(self.model.parameters(), lr=cfg.TRAIN.lr)
+        elif cfg.TRAIN.optimizer == "adam":
+            self.optim = torch.optim.Adam(self.model.parameters(), lr=cfg.TRAIN.lr)
+        else:
+            raise ValueError(f"Unsupported optimizer: {cfg.TRAIN.optimizer}")
 
         self.sched = get_scheduler(
             self.optim,
@@ -250,6 +286,13 @@ class Trainer:
             completed_steps,
         )
 
+    def _metric_event(self, **fields: Any) -> None:
+        """Append bounded JSONL training metrics, without storing history in RAM."""
+        path = Path(self.cfg.RUN.out_dir) / "metrics.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(fields, sort_keys=True, default=str) + "\n")
+
     def _train_batch(
         self,
         payloads: list[Any],
@@ -281,43 +324,15 @@ class Trainer:
             inputs = torch.from_numpy(context_ids).to(self.device)
             target_ids = torch.tensor(targets, dtype=torch.long, device=self.device)
 
-        if loss == "hs":
-            assert self.hs_paths is not None and self.hs_codes is not None
-            paths, codes, path_lens = pack_hs_batch(
-                target_ids.cpu(),
-                self.hs_paths,
-                self.hs_codes,
-            )
-            paths, codes, path_lens = (
-                paths.to(self.device),
-                codes.to(self.device),
-                path_lens.to(self.device),
-            )
-            if arch == "skipgram":
-                result = self.model.forward_hs(inputs, paths, codes, path_lens)
-            else:
-                assert lengths is not None
-                result = self.model.forward_hs(inputs, lengths, paths, codes, path_lens)
-        else:
-            assert self.neg_sampler is not None
-            negatives = draw_negatives(
-                self.neg_sampler,
-                len(payloads),
-                self.cfg.MODEL.ns_neg_k,
-                forbid=target_ids,
-            ).to(self.device)
-            if arch == "skipgram":
-                result = self.model.forward_ns(inputs, target_ids, negatives)
-            else:
-                assert lengths is not None
-                result = self.model.forward_ns(inputs, lengths, target_ids, negatives)
-
+        result = LOSS_REG.get(loss)(self, inputs, target_ids, lengths)
         self.optim.zero_grad(set_to_none=True)
         result.loss.backward()
         self.optim.step()
 
         if step % 200 == 0:
             value = result.loss.item()
+            self._metric_event(kind="train_step", step=step, loss=value, lr=lr_used,
+                               token_progress=progress_before_batch)
             logger.info(
                 "[{}-{}][step={}] loss={:.4f} lr={:.6g} token_progress={}/{}",
                 arch,
@@ -394,7 +409,7 @@ class Trainer:
                 positions,
                 self.cfg.MODEL.window,
                 rng=window_rng,
-                random_window=self.cfg.MODEL.window_strategy == "random",
+                window_sampling=self.cfg.MODEL.window_sampling,
             ):
                 global_progress = epoch_offset + sentence_base + sentence_progress
                 batch.append((payload, global_progress))
@@ -457,6 +472,7 @@ class Trainer:
                 ),
                 "device": str(self.device),
                 "vocab_size": self.vocab.size,
+                "trainable_parameters": sum(p.numel() for p in self.model.parameters() if p.requires_grad),
                 "raw_tokens": self.vocab.total_tokens,
                 "source_sentences": self.vocab.sentences,
                 "corpus_sha256": self.vocab.corpus_sha256,
@@ -483,6 +499,11 @@ class Trainer:
                 )
                 step, stats = self._train_epoch(step, epoch)
                 self.epoch_stats.append(stats)
+                self._metric_event(kind="epoch", **asdict(stats))
+                if self.writer is not None:
+                    self.writer.add_scalar("epoch/examples", stats.examples, epoch + 1)
+                    self.writer.add_scalar("epoch/retained_tokens", stats.retained_tokens, epoch + 1)
+                    self.writer.add_scalar("epoch/optimizer_steps", stats.optimizer_steps, epoch + 1)
                 self.completed_steps = step
                 self.next_epoch = epoch + 1
 

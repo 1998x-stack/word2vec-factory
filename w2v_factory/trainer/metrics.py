@@ -26,7 +26,7 @@ def evaluate_analogy(
     for a, b, c, d in items:
         if a not in stoi or b not in stoi or c not in stoi or d not in stoi:
             continue
-        va, vb, vc = W[stoi[a]], W[stoi[b]], W[stoi[c]]
+        va, vb, vc = emb[stoi[a]], emb[stoi[b]], emb[stoi[c]]
         q = vb - va + vc
         q = q / (np.linalg.norm(q) + 1e-9)
         sims = W @ q

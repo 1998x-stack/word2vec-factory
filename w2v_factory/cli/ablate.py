@@ -1,56 +1,136 @@
+"""Reproducible ablation factory CLI: plan -> train -> evaluate -> summarize."""
 from __future__ import annotations
 
 import argparse
-import itertools
+import json
 import os
-from copy import deepcopy
-from typing import Any
+import platform
+import subprocess
+import sys
+import time
 
-import yaml
+import numpy as np
+import torch
+from dataclasses import asdict
+from datetime import datetime, timezone
+from pathlib import Path
+
 from loguru import logger
 
-from ..config import _from_dict, _to_dict, load_cfg
+from ..experiments.evaluate import evaluate_file
+from ..experiments.plan import Experiment, build_plan
+from ..experiments.summary import write_table
 from ..log import setup_logging
 from ..trainer.engine import Trainer
 
 
-def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Run ablation sweeps")
-    p.add_argument("--grid", type=str, required=True, help="configs/ablation_grid.yaml")
-    return p.parse_args()
+def _write_json(path: Path, obj: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(json.dumps(obj, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
+    os.replace(temp, path)
 
 
-def set_by_path(d: dict[str, Any], path: str, value: Any) -> None:
-    keys = path.split(".")
-    cur: dict[str, Any] = d
-    for k in keys[:-1]:
-        cur = cur.setdefault(k, {})
-    cur[keys[-1]] = value
+def _event(root: Path, name: str, **values) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / "events.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps({
+            "ts_utc": datetime.now(timezone.utc).isoformat(),
+            "event": name, **values,
+        }, ensure_ascii=False, default=str) + "\n")
+
+
+def _git_head() -> str | None:
+    try:
+        proc = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                              check=True, text=True, timeout=3)
+        return proc.stdout.strip() or None
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+
+
+def _run(root: Path, exp: Experiment, force: bool = False) -> str:
+    out = Path(exp.cfg.RUN.out_dir)
+    state_path = out / "experiment.json"
+    manifest = out / "run_manifest.json"
+    config = asdict(exp.cfg)
+    if manifest.exists() and state_path.exists() and not force:
+        existing = json.loads(state_path.read_text(encoding="utf-8"))
+        old = json.loads(manifest.read_text(encoding="utf-8"))
+        if old.get("config") != config:
+            raise RuntimeError(f"Existing run config mismatch (refusing overwrite): {out}")
+        if existing.get("status") == "completed":
+            _event(root, "skip", run_id=exp.run_id, reason="already_completed")
+            return "skipped"
+    setup_logging(str(out))
+    _event(root, "start", run_id=exp.run_id, variant=exp.variant, seed=exp.seed)
+    state = {
+        "run_id": exp.run_id, "variant": exp.variant, "seed": exp.seed,
+        "changes": exp.changes, "status": "running",
+        "environment": {
+            "python": sys.version.split()[0], "torch": str(torch.__version__),
+            "numpy": np.__version__, "platform": platform.platform(),
+            "git_head": _git_head(),
+        },
+    }
+    _write_json(state_path, state)
+    start = time.perf_counter()
+    try:
+        trainer = Trainer(exp.cfg)
+        state["environment"]["device"] = str(trainer.device)
+        _write_json(state_path, state)
+        trainer.train()
+        state["wall_time_s"] = time.perf_counter() - start
+        if exp.cfg.EVAL.analogy_file:
+            state["evaluation"] = evaluate_file(
+                out / "embeddings.txt",
+                exp.cfg.EVAL.analogy_file,
+                lowercase=exp.cfg.DATA.lowercase,
+            )
+            _write_json(out / "evaluation.json", state["evaluation"])
+        state["status"] = "completed"
+        _write_json(state_path, state)
+        _event(root, "completed", run_id=exp.run_id, wall_time_s=state["wall_time_s"])
+        return "completed"
+    except Exception as exc:
+        state["status"] = "failed"
+        state["error"] = f"{type(exc).__name__}: {exc}"
+        state["wall_time_s"] = time.perf_counter() - start
+        _write_json(state_path, state)
+        _event(root, "failed", run_id=exp.run_id, error=state["error"])
+        logger.exception("Experiment {} failed", exp.run_id)
+        return "failed"
 
 
 def main() -> None:
-    args = parse_args()
-    with open(args.grid, encoding="utf-8") as f:
-        grid_cfg = yaml.safe_load(f)
-    base_cfg_path = grid_cfg["base_cfg"]
-    choices = grid_cfg["grid"]
-    out_root = grid_cfg.get("out_root", "runs/ablations")
-    base = load_cfg(base_cfg_path)
-    base_d = _to_dict(base)
-
-    keys = list(choices.keys())
-    values = [choices[k] for k in keys]
-    for vals in itertools.product(*values):
-        d = deepcopy(base_d)
-        name_parts = []
-        for k, v in zip(keys, vals, strict=True):
-            set_by_path(d, k, v)
-            name_parts.append(f"{k.replace('.', '_')}={v}")
-        cfg = _from_dict(d)
-        cfg.RUN.out_dir = os.path.join(out_root, "__".join(name_parts))
-        setup_logging(cfg.RUN.out_dir)
-        logger.info(f"Running ablation: {cfg.RUN.out_dir}")
-        Trainer(cfg).train()
+    p = argparse.ArgumentParser(description="Paper-traceable Word2Vec experiment factory")
+    p.add_argument("--grid", required=True)
+    p.add_argument("--dry-run", action="store_true", help="Show the deterministic run plan; train nothing")
+    p.add_argument("--max-runs", type=int, default=None, help="Fail fast if plan exceeds this many runs")
+    p.add_argument("--only", type=str, default=None, help="Execute exactly one planned run_id")
+    p.add_argument("--fail-fast", action="store_true")
+    p.add_argument("--force", action="store_true", help="Explicitly replace completed artifacts")
+    args = p.parse_args()
+    runs, root = build_plan(args.grid, max_runs=args.max_runs)
+    if args.only is not None:
+        runs = [r for r in runs if r.run_id == args.only]
+        if not runs:
+            p.error(f"Unknown run_id: {args.only}")
+    print(f"strategy plan: {len(runs)} distinct runs; root={root}")
+    for exp in runs:
+        print(f"{exp.run_id}  {exp.changes}")
+    if args.dry_run:
+        return
+    failed = 0
+    for exp in runs:
+        status = _run(root, exp, force=args.force)
+        if status == "failed":
+            failed += 1
+            if args.fail_fast:
+                break
+    write_table(root)
+    if failed:
+        raise SystemExit(f"{failed} experiment(s) failed; inspect events.jsonl and experiment.json")
 
 
 if __name__ == "__main__":

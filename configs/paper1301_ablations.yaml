@@ -1,0 +1,25 @@
+# Paired-seed OFAT first; profiles are joint historical architecture settings.
+base_cfg: paper1301_base.yaml
+out_root: runs/paper1301/ablations
+strategy: one_factor
+seeds: [11, 23, 37]
+max_runs: 120
+factors:
+  MODEL.arch: [cbow, skipgram]
+  MODEL.dim: [50, 100, 300, 600]
+  MODEL.window: [2, 4, 8, 10]
+  MODEL.window_sampling: [fixed, uniform]
+  MODEL.cbow_pooling: [mean, sum]
+  TRAIN.epochs: [1, 3, 5]
+  TRAIN.lr: [0.0125, 0.025, 0.05]
+profiles:
+  cbow_original:
+    MODEL.arch: cbow
+    MODEL.window: 4
+    MODEL.window_sampling: fixed
+    MODEL.loss: hs
+  skipgram_original:
+    MODEL.arch: skipgram
+    MODEL.window: 10
+    MODEL.window_sampling: uniform
+    MODEL.loss: hs
