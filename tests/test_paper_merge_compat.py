@@ -1,6 +1,7 @@
 """Check both planning protocols and shared model/optimizer registration."""
 from w2v_factory.config import Cfg, DataCfg, ModelCfg
-from w2v_factory.experiments.paper_plan import build_plan as build_paper_plan, load_suite
+from w2v_factory.experiments.paper_plan import build_plan as build_paper_plan
+from w2v_factory.experiments.paper_plan import load_suite
 from w2v_factory.experiments.plan import build_plan as build_grid_plan
 from w2v_factory.factory import make_model, make_optimizer
 

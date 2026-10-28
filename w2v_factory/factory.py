@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import torch
 
-from .models import make_model
+from .models import make_model as make_model
 from .registry import Registry
 
 OPTIMIZER_REG = Registry()
