@@ -1,0 +1,25 @@
+# Extensions intended as controlled engineering studies, not 2013 paper claims.
+base_cfg: configs/base.yaml
+out_root: runs/engineering-ablation
+eval_file: questions-words.txt
+seeds: [42, 43, 44]
+max_cases: 90
+suites:
+  - id: optimizer
+    source: engineering
+    hypothesis: "Optimizer choice changes stability, convergence and elapsed time."
+    design: one_factor
+    fixed:
+      MODEL.loss: ns
+      TRAIN.optimizer: sgd
+    axes:
+      TRAIN.optimizer: [sgd, adam]
+  - id: batch_and_lr
+    source: engineering
+    hypothesis: "Batch size and LR schedule alter throughput and relation accuracy."
+    design: factorial
+    fixed:
+      MODEL.loss: ns
+    axes:
+      TRAIN.batch_size: [256, 1024]
+      TRAIN.lr_schedule: [linear, none]

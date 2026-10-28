@@ -1,0 +1,40 @@
+# Five CPU-friendly cases on the bundled demonstration corpus.
+# Deliberately NOT a numeric reproduction of the 2013 Google News experiments.
+base_cfg: configs/base.yaml
+out_root: runs/paper-smoke
+eval_file: questions-words.txt
+seeds: [42]
+max_cases: 8
+suites:
+  - id: arch_window
+    source: original_1301
+    hypothesis: "A wider context and CBOW aggregation change semantics and efficiency under matched conditions."
+    design: one_factor
+    fixed:
+      MODEL.loss: hs
+      MODEL.dim: 16
+      MODEL.window: 2
+      TRAIN.epochs: 1
+      TRAIN.batch_size: 512
+      DATA.min_count: 1
+      DATA.subsample_t: null
+      RUN.tb: false
+    axes:
+      MODEL.arch: [skipgram, cbow]
+      MODEL.window: [2, 5]
+  - id: objective
+    source: followup_1310
+    hypothesis: "NS trades objective approximation for throughput against HS at fixed architecture."
+    design: one_factor
+    fixed:
+      MODEL.arch: skipgram
+      MODEL.loss: hs
+      MODEL.dim: 16
+      MODEL.window: 2
+      TRAIN.epochs: 1
+      TRAIN.batch_size: 512
+      DATA.min_count: 1
+      DATA.subsample_t: null
+      RUN.tb: false
+    axes:
+      MODEL.loss: [hs, ns]
