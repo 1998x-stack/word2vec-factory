@@ -56,3 +56,19 @@ tensorboard --logdir runs/paper1301/ablations
     python -m w2v_factory.cli.ablate --grid configs/paper1301_table2_grid.yaml --dry-run
 
 该预处理只创建可追溯 nested-prefix token budgets，绝不自动下载 Google News，真实原论文指标仍需要真实语料、算力及评测。
+
+
+## Additional hypothesis-based paper suites (PR #6)
+
+The existing `ablate --grid` workflow remains unchanged. A second, explicitly scoped interface provides multiple named research hypotheses and paired-seed controls. Both use the **same core Trainer** but have different YAML formats; the second planner lives in `w2v_factory/experiments/paper_plan.py` so it cannot shadow the original `experiments/plan.py`.
+
+```bash
+python -m w2v_factory.cli.paper_ablate --suite configs/experiments/smoke.yaml
+# Only run after verifying the plan and research dataset:
+python -m w2v_factory.cli.paper_ablate --suite configs/experiments/smoke.yaml --run
+python -m w2v_factory.cli.paper_ablate --suite configs/experiments/smoke.yaml --report-only
+```
+
+This suite adds per-category vocabulary coverage, matched-seed delta summaries, exploratory bootstrap intervals, structured case events, and optional SVG/PNG diagnostics. The sample corpus is for mechanics-only testing, **not** evidence of paper-scale accuracy.
+
+[Hypothesis suite protocol](docs/experiments/protocol.md) · [Extended roadmap](docs/experiments/roadmap.md) · [Detailed 1301 paper mapping](docs/papers/1301.3781-traceability.md) · [1310 follow-up mechanisms](docs/papers/1310.4546-extensions.md).

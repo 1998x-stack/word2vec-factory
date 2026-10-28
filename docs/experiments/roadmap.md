@@ -16,3 +16,8 @@
 Avoid interpreting Stage 06–09 as delivered. No original Google News accuracy
 or DistBelief speed benchmark is claimed until matching datasets, test partitions,
 compute and experimental settings can be verified.
+
+
+## Integration status (2026-10-28)
+
+The PR #6 suite planner was namespaced to `experiments/paper_plan.py` when merging the newer factory baseline. The existing `experiments/plan.py`, `cli.ablate`, CBOW pooling, streaming checkpoints, and input-vector 3CosAdd offset behavior remain canonical. The alternate suite runner and paired-seed statistics are additive; neither workflow implies reproduction of proprietary datasets.
