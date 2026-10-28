@@ -1,91 +1,55 @@
-# Architecture
+# Architecture — Word2Vec Factory
 
-This document describes how `word2vec-factory` is organized and how data flows
-through a training run.
+本工程通过**单一训练器 + Registry Factory + 可审计实验层**避免分叉训练逻辑。核心算法由 PyTorch/NumPy 从零实现；不调用 gensim 训练器，也不声称复现原文 DistBelief 分布式系统。
 
-## Design goals
+## 组件关系
 
-- **Pluggable** pieces (models, losses, tokenizers, schedulers) exposed through a
-  small registry, so ablations can swap one component without touching the
-  training loop.
-- **From scratch**: every algorithm (Huffman, 3Cos scores, subsampling) is
-  implemented directly — no `gensim` underneath.
+```text
+configs/*.yaml ──┐
+                 ├─> config.load_cfg() ─> strict Cfg
+suite YAML ──────┘     experiments.plan.build_plan()
+                           │
+                 EXPERIMENT_REG(one_factor / grid)
+                           │
+                    1 run / paired seed
+                           │
+corpus files ─> TOKENIZER_REG ─> vocab + corpus fingerprint
+                           │
+             MODEL_REG + LOSS_REG + SCHED_REG
+                           │
+                       Trainer
+               ┌───────────┴───────────┐
+        objective + optimizer     metrics/checkpoint
+               │                       │
+          embeddings.*         manifest / logs / tb
+               └───────────┬───────────┘
+                   experiments.evaluate
+                           │
+                  per-category analogy
+                           │
+                  summary.csv / figures
+```
 
-## Factories and the registry
+## Registry 与真实调用点
 
-`w2v_factory/registry.py` defines a tiny `Registry` with register/get/create.
-Four global registries exist:
-
-| Registry | Holds | Example |
+| Registry | 注册/选择 | 调用者 |
 | --- | --- | --- |
-| `MODEL_REG` | CBOW / Skip-gram | `SkipGram` |
-| `LOSS_REG` | NS / HS packing & losses | `negative_sampling` |
-| `TOKENIZER_REG` | tokenizers | `simple` |
-| `SCHED_REG` | lr schedulers | `linear` |
+| `MODEL_REG` | CBOW、Skip-gram | `models/__init__.py` → `make_model` → `trainer/engine.py` |
+| `LOSS_REG` | HS、NS 的 batch objective 分发 | `trainer/engine.py` → `_train_batch` |
+| `TOKENIZER_REG` | simple、whitespace | `data/text_reader.py` → `iter_tokens` |
+| `SCHED_REG` | none、linear token progress | `trainer/lr_schedulers.py` → `get_scheduler` |
+| `EXPERIMENT_REG` | one_factor、grid | `experiments/plan.py` → `build_plan` |
 
-The engine calls the concrete `forward_ns` / `forward_hs` methods directly for
-clarity; the registry keeps new components easy to add and ablate.
+模型在自身 `forward_hs` / `forward_ns` 中完成张量数学；objective Registry 负责选择并组装批次。不要把“工厂注册”误解为每个模块都有独立的可替换整个 Trainer 的接口。
 
-## Data flow
+## 数据流与内存
 
-```
-pass 1: raw text files
-   │  iter_tokens()                      (line-by-line)
-   ▼
-build_vocab()                            (counts + token-stream SHA-256)
-   │
-   ├── compute_discard_probs()
-   └── build_training_plan()             (token-progress denominator)
+训练开始先流式构造词表、count 和 token-stream SHA-256。每轮重新流式遍历语料，通过 `SentenceIndexer` 按 epoch 独立次采样，再用 `generate_*_pairs_with_progress` 产生 CBOW/SG 样本。Trainer 仅缓存当前句子与最多 `TRAIN.batch_size` 个训练样本。独立 RNG streams 用于次采样、负采样及上下文窗口。source-token-progress LR 不依赖实际样本对数量。
 
-passes 2..E+1: reread raw text each epoch
-   │
-   ▼
-SentenceIndexer.encode_with_positions()  (epoch-specific subsampling)
-   │
-   ▼
-generate_*_pairs_with_progress()         (epoch-specific window RNG)
-   │
-   ▼
-bounded batch buffer                     (<= TRAIN.batch_size examples)
-   │
-   ├── token-progress LR
-   └── HS paths / isolated NS RNG
-   ▼
-forward → backward → optimizer.step()
-```
+HS 在 V 个词上使用 V−1 个 Huffman 内部 output 节点；Skip-gram 的 HS target 是上下文词，CBOW 的 target 是中心词。NS 按 unigram 幂次采样并排除与正例冲突的词。数学及历史修复见 [算法推导](from-scratch.md) 和 [正确性审查](training-correctness-review.md)。
 
-## Model responsibilities
+## 可恢复性与证据
 
-- `models/base.py`: shared in/out embeddings and init.
-- `models/skipgram.py`, `models/cbow.py`: forward computations for NS and HS.
-- The **context** is `[B, Lmax]` padded; a mask selects real tokens.
+每个 epoch 可原子化保存模型、optimizer、scheduler、采样 RNG、全局 RNG、词表/语料签名和统计；恢复仅支持受控的 epoch 边界。Trainer 在每次语料 pass 核对 fingerprint，以检测源文件或 tokenization 意外漂移。每次完成的训练导出输入 embedding 和 `run_manifest.json`。实验层增补 `experiment.json`、`evaluation.json`、`events.jsonl`、`summary.csv`，可选择绘图。
 
-## Loss math
-
-- **Negative sampling**: objective is `log σ(v·u₀) + Σ_neg log σ(-v·u_k)`.
-- **Hierarchical softmax**: each word gets a root-to-leaf Huffman path; the loss is
-  the product of per-node Bernoulli probabilities `σ((2code−1)·v·u_node)`. Only the
-  `V-1` internal Huffman nodes receive output embeddings; path IDs are compact in
-  `[0, V-2]`.
-
-See `docs/from-scratch.md` for derivations.
-
-## Training control and reproducibility
-
-Training randomness is split into independent streams for per-epoch subsampling,
-negative sampling, and per-epoch context windows. Linear LR decay follows
-in-vocabulary source-token progress, so randomized pair cardinality never changes
-the schedule denominator. The engine rereads the corpus per epoch and keeps only
-one sentence plus a bounded example batch. Each epoch also recomputes the
-token-stream fingerprint to detect corpus/tokenizer drift. Successful runs write
-`run_manifest.json` with token progress, stream statistics, RNG assignments,
-and peak buffered examples.
-
-See [training-plan.md](training-plan.md) for the invariants and rationale.
-
-
-## 研究 Factory 扩展（2026-10）
-
-MODEL_REG 由 models/__init__.py 的 make_model() 创建具体架构；LOSS_REG 由 trainer/engine.py 选择 HS/NS 对应批次目标；SCHED_REG 由 trainer/lr_schedulers.py 管理 token-progress decay；TOKENIZER_REG 已由 data/text_reader.py 管理。experiments/plan.py 引入 EXPERIMENT_REG（one_factor/grid），构建基于相同 corpus、seed 的变化方案，实际优化逻辑仍由 Trainer 单一实现，杜绝各实验复制不同训练代码。
-
-对应论文条目见 paper-1301-traceability.md，输出日志和图表见 experiment-artifacts.md。
+准确率为分类 3CosAdd，必须同时报告 OOV 覆盖率。数据/硬件/模型预算不同会混淆公平比较。有关配置与流程的完整约定，参见 [配置参考](config-reference.md)、[流式训练](training-plan.md)、[恢复协议](checkpoint-resume.md)、[产物契约](experiment-artifacts.md)。

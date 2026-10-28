@@ -1,3 +1,6 @@
+# LEGACY example: this historical filename does NOT mean a full reproduction
+# of arXiv:1301.3781. Prefer paper1301_base.yaml and paper1301_ablations.yaml
+# for paper-traceable experiments; see configs/README.md.
 INCLUDE: base.yaml
 DATA:
   subsample_t: null
