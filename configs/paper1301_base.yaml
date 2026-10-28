@@ -1,0 +1,25 @@
+# Original 1301.3781 reproducibility profile: small-data smoke by default.
+# Replace DATA.input_files with a licensed, documented large training corpus.
+INCLUDE: base.yaml
+RUN:
+  out_dir: runs/paper1301/base
+  tb: true
+  checkpoint_every_epochs: 1
+DATA:
+  min_count: 1
+  subsample_t: null
+TRAIN:
+  epochs: 3
+  batch_size: 256
+  lr: 0.025
+  lr_schedule: linear
+  optimizer: sgd
+MODEL:
+  arch: cbow
+  dim: 100
+  window: 4
+  window_sampling: fixed
+  cbow_pooling: mean
+  loss: hs
+EVAL:
+  analogy_file: questions-words.txt

@@ -1,0 +1,17 @@
+# §4.2 Table 2: dimension × training-word count (72 paired-seed runs).
+# Generate all slices first with cli.corpus_budget; exact file paths below.
+# The original Google News corpus is NOT bundled or claimed reproduced.
+base_cfg: paper1301_base.yaml
+out_root: runs/paper1301/table2
+strategy: grid
+seeds: [11, 23, 37]
+max_runs: 72
+grid:
+  MODEL.dim: [50, 100, 300, 600]
+  DATA.input_files:
+    - [data/paper1301_slices/tokens-24000000.txt]
+    - [data/paper1301_slices/tokens-49000000.txt]
+    - [data/paper1301_slices/tokens-98000000.txt]
+    - [data/paper1301_slices/tokens-196000000.txt]
+    - [data/paper1301_slices/tokens-391000000.txt]
+    - [data/paper1301_slices/tokens-783000000.txt]

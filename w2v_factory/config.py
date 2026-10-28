@@ -47,6 +47,9 @@ class ModelCfg:
     ns_neg_k: int = 5
     loss: str = "ns"  # ns | hs
     share_input_output: bool = False
+    window_sampling: str = "uniform"  # uniform | fixed
+    cbow_pooling: str = "mean"  # mean | sum
+    ns_power: float = 0.75
 
 
 @dataclass

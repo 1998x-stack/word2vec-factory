@@ -11,7 +11,13 @@ def _random(rng: np.random.Generator | None) -> float:
     return float(rng.random())
 
 
-def _window(rng: np.random.Generator | None, max_window: int) -> int:
+def _window(rng: np.random.Generator | None, max_window: int, sampling: str = "uniform") -> int:
+    if max_window <= 0:
+        raise ValueError("max_window must be positive")
+    if sampling == "fixed":
+        return max_window
+    if sampling != "uniform":
+        raise ValueError(f"Unknown context-window sampling: {sampling}")
     if rng is None:
         return int(np.random.randint(1, max_window + 1))
     return int(rng.integers(1, max_window + 1))
@@ -60,11 +66,12 @@ def generate_skipgram_pairs(
     tokens: list[int],
     max_window: int,
     rng: np.random.Generator | None = None,
+    window_sampling: str = "uniform",
 ) -> Iterable[tuple[int, int]]:
     """为一条句子生成 Skip-gram (center, context) 正样本对。"""
     length = len(tokens)
     for i, center in enumerate(tokens):
-        win = _window(rng, max_window)
+        win = _window(rng, max_window, window_sampling)
         left = max(0, i - win)
         right = min(length, i + win + 1)
         for j in range(left, right):
@@ -78,13 +85,14 @@ def generate_skipgram_pairs_with_progress(
     positions: list[int],
     max_window: int,
     rng: np.random.Generator | None = None,
+    window_sampling: str = "uniform",
 ) -> Iterable[tuple[tuple[int, int], int]]:
     """Yield Skip-gram pairs plus the center token's source progress ordinal."""
     if len(tokens) != len(positions):
         raise ValueError("tokens and positions must have the same length")
     length = len(tokens)
     for i, center in enumerate(tokens):
-        win = _window(rng, max_window)
+        win = _window(rng, max_window, window_sampling)
         left = max(0, i - win)
         right = min(length, i + win + 1)
         for j in range(left, right):
@@ -97,11 +105,12 @@ def generate_cbow_pairs(
     tokens: list[int],
     max_window: int,
     rng: np.random.Generator | None = None,
+    window_sampling: str = "uniform",
 ) -> Iterable[tuple[list[int], int]]:
     """为一条句子生成 CBOW (contexts..., target)。"""
     length = len(tokens)
     for i, target in enumerate(tokens):
-        win = _window(rng, max_window)
+        win = _window(rng, max_window, window_sampling)
         left = max(0, i - win)
         right = min(length, i + win + 1)
         ctx = [tokens[j] for j in range(left, right) if j != i]
@@ -114,13 +123,14 @@ def generate_cbow_pairs_with_progress(
     positions: list[int],
     max_window: int,
     rng: np.random.Generator | None = None,
+    window_sampling: str = "uniform",
 ) -> Iterable[tuple[tuple[list[int], int], int]]:
     """Yield CBOW examples plus the target token's source progress ordinal."""
     if len(tokens) != len(positions):
         raise ValueError("tokens and positions must have the same length")
     length = len(tokens)
     for i, target in enumerate(tokens):
-        win = _window(rng, max_window)
+        win = _window(rng, max_window, window_sampling)
         left = max(0, i - win)
         right = min(length, i + win + 1)
         ctx = [tokens[j] for j in range(left, right) if j != i]

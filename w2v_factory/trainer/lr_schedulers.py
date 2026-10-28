@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import torch
 
+from ..registry import SCHED_REG
+
 
 class TokenProgressScheduler:
     """Linear LR decay driven by source-token progress rather than optimizer steps."""
@@ -45,15 +47,23 @@ class TokenProgressScheduler:
             group["lr"] = base_lr * ratio
 
 
+@SCHED_REG.register("none")
+def _no_scheduler(optim: torch.optim.Optimizer, total_tokens: int | None):
+    return None
+
+
+@SCHED_REG.register("linear")
+def _linear_scheduler(optim: torch.optim.Optimizer, total_tokens: int | None):
+    if total_tokens is None or total_tokens <= 0:
+        raise ValueError("linear lr_schedule requires positive total_tokens")
+    return TokenProgressScheduler(optim, total_tokens)
+
+
 def get_scheduler(
     optim: torch.optim.Optimizer,
     name: str,
     total_tokens: int | None,
 ) -> TokenProgressScheduler | None:
-    if name == "none":
-        return None
-    if name == "linear":
-        if total_tokens is None or total_tokens <= 0:
-            raise ValueError("linear lr_schedule requires positive total_tokens")
-        return TokenProgressScheduler(optim, total_tokens)
-    raise ValueError(f"Unsupported lr_schedule: {name}")
+    if name not in {"none", "linear"}:
+        raise ValueError(f"Unsupported lr_schedule: {name}")
+    return SCHED_REG.create(name, optim=optim, total_tokens=total_tokens)

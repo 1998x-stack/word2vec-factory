@@ -55,3 +55,13 @@ A config can `INCLUDE` another file to inherit and override it. Relative include
 > Note: the config was cleaned so every key above actually affects training
 > (dead keys like `num_workers`, `save_every_steps`, and `hs_use_huffman` were
 > removed from the schema).
+
+## 新增研究消融控制（2026-10）
+
+| YAML key | 默认值 | 含义 |
+| --- | --- | --- |
+| MODEL.window_sampling | uniform | uniform 每个中心词独立抽 R∈[1,C]；fixed 始终 C |
+| MODEL.cbow_pooling | mean | mean 原论文 CBOW 平均；sum 非论文主设置的干预 |
+| MODEL.ns_power | 0.75 | loss=ns 时 unigram 分布指数，来自 1310.4546 |
+
+新增参数包含在 checkpoint training signature 中，升级后旧 checkpoint 的兼容性需要单独验证。研究 baseline 参阅 configs/paper1301_base.yaml。

@@ -7,7 +7,14 @@ from .base import W2VOutput, Word2VecBase
 
 
 class CBOW(Word2VecBase):
-    """CBOW: 平均上下文向量预测中心词。"""
+    """CBOW: configurable mean/sum context pooling, order-independent."""
+
+    def __init__(self, vocab_size: int, dim: int, share_io: bool = False,
+                 out_vocab_size: int | None = None, pooling: str = "mean") -> None:
+        super().__init__(vocab_size, dim, share_io=share_io, out_vocab_size=out_vocab_size)
+        if pooling not in {"mean", "sum"}:
+            raise ValueError(f"Unsupported CBOW pooling: {pooling}")
+        self.pooling = pooling
 
     def _mean_context(self, ctxs: torch.Tensor, ctx_lens: torch.Tensor) -> torch.Tensor:
         if ctxs.ndim != 2 or ctx_lens.ndim != 1 or ctxs.shape[0] != ctx_lens.numel():
@@ -19,7 +26,7 @@ class CBOW(Word2VecBase):
         vectors = self.in_embed(ctxs)
         mask = torch.arange(max_len, device=ctxs.device)[None, :] < ctx_lens[:, None]
         summed = (vectors * mask.unsqueeze(-1)).sum(dim=1)
-        return summed / ctx_lens.unsqueeze(-1)
+        return summed / ctx_lens.unsqueeze(-1) if self.pooling == "mean" else summed
 
     def forward_ns(
         self, ctxs: torch.Tensor, ctx_lens: torch.Tensor, targets: torch.Tensor, neg_targets: torch.Tensor
