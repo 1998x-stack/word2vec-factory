@@ -82,7 +82,7 @@ def score_analogies(
     index = {word: i for i, word in enumerate(words)}
     if len(index) != len(words):
         raise ValueError("Duplicate word in embeddings")
-    # Normalize once. Query and candidates use 3CosAdd; input terms are masked.
+    # Normalize candidates only; 3CosAdd offsets use raw input vectors.
     matrix = np.asarray(vectors, dtype=np.float32)
     norm = np.linalg.norm(matrix, axis=1, keepdims=True)
     normalized = matrix / np.maximum(norm, 1e-12)
@@ -101,7 +101,7 @@ def score_analogies(
     for offset in range(0, len(covered), batch_size):
         batch = covered[offset : offset + batch_size]
         ids = np.asarray([pair for _, pair in batch], dtype=np.int64)
-        query = normalized[ids[:, 1]] - normalized[ids[:, 0]] + normalized[ids[:, 2]]
+        query = matrix[ids[:, 1]] - matrix[ids[:, 0]] + matrix[ids[:, 2]]
         query = query / np.maximum(np.linalg.norm(query, axis=1, keepdims=True), 1e-12)
         scores = normalized @ query.T
         scores[ids[:, :3], np.arange(len(batch))[:, None]] = -np.inf
@@ -129,5 +129,5 @@ def score_analogies(
         "overall": summarize(grand),
         "families": {name: summarize(value) for name, value in sorted(families.items())},
         "categories": {name: summarize(value) for name, value in sorted(stats.items())},
-        "method": "3CosAdd, normalized cosine, exclude all three input words; exact top-1",
+        "method": "3CosAdd raw offsets, candidate cosine, exclude all three input words; exact top-1",
     }

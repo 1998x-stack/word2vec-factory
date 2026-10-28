@@ -19,7 +19,7 @@ from ..data.vocab import TokenStreamFingerprint
 from ..log import setup_logging
 from ..trainer.engine import Trainer
 from .evaluation import read_analogies, read_embedding_words, score_analogies
-from .plan import Case
+from .paper_plan import Case
 from .statistics import aggregate_seed_results
 
 

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from w2v_factory.experiments.evaluation import read_analogies, score_analogies
-from w2v_factory.experiments.plan import build_plan, load_suite
+from w2v_factory.experiments.paper_plan import build_plan, load_suite
 
 
 def _suite(tmp_path: Path, *, design: str = "one_factor", cases: int = 15) -> Path:

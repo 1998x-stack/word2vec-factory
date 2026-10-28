@@ -6,7 +6,7 @@ import json
 import pytest
 
 from w2v_factory.config import Cfg, DataCfg, EvalCfg, ModelCfg, RunCfg, TrainCfg
-from w2v_factory.experiments.plan import Case
+from w2v_factory.experiments.paper_plan import Case
 from w2v_factory.experiments.runner import run_case, summarize_results
 
 
@@ -32,7 +32,7 @@ def test_experiment_case_train_evaluate_reuse_and_report(tmp_path):
             optimizer="sgd", device="cpu",
         ),
         MODEL=ModelCfg(
-            arch="cbow", dim=8, window=2, window_strategy="fixed",
+            arch="cbow", dim=8, window=2, window_sampling="fixed",
             ns_neg_k=2, loss="hs",
         ),
         EVAL=EvalCfg(analogy_file=str(analogies)),

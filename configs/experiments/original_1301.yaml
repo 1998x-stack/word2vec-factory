@@ -12,7 +12,7 @@ suites:
     design: one_factor
     fixed:
       MODEL.arch: cbow
-      MODEL.window_strategy: fixed
+      MODEL.window_sampling: fixed
       MODEL.loss: hs
       MODEL.dim: 100
       MODEL.window: 4
@@ -46,7 +46,7 @@ suites:
       DATA.subsample_t: null
     axes:
       MODEL.arch: [skipgram, cbow]
-      MODEL.window_strategy: [random, fixed]
+      MODEL.window_sampling: [uniform, fixed]
   - id: epoch_budget
     source: original_1301
     hypothesis: "Repeated passes have diminishing accuracy gains relative to their cost."
@@ -72,4 +72,4 @@ suites:
     axes:
       MODEL.arch: [skipgram, cbow]
       MODEL.dim: [50, 100, 300]
-      MODEL.window_strategy: [random, fixed]
+      MODEL.window_sampling: [uniform, fixed]

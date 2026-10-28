@@ -25,6 +25,7 @@ class DataCfg:
     min_count: int = 5
     max_vocab: int = 1_000_000
     subsample_t: float | None = 1e-5
+    subsample_formula: str = "legacy"  # legacy | mikolov_1310
     tokenizer: str = "simple"
     max_sent_len: int = 10_000
 

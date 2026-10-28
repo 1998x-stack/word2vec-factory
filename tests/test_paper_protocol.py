@@ -17,7 +17,7 @@ def test_paper_cbow_fixed_four_words_each_side():
     samples = list(
         generate_cbow_pairs_with_progress(
             tokens, positions, 4, rng=np.random.default_rng(19),
-            random_window=False,
+            window_sampling="fixed",
         )
     )
     assert samples[4] == (([0, 1, 2, 3, 5, 6, 7, 8], 4), 5)
@@ -25,7 +25,7 @@ def test_paper_cbow_fixed_four_words_each_side():
 
 def test_skipgram_fixed_radius_includes_both_directions():
     samples = list(generate_skipgram_pairs_with_progress(
-        [0, 1, 2], [1, 2, 3], 2, random_window=False,
+        [0, 1, 2], [1, 2, 3], 2, window_sampling="fixed",
     ))
     assert samples == [
         ((0, 1), 1), ((0, 2), 1), ((1, 0), 2),

@@ -1,23 +1,12 @@
-"""Factories used by the production trainer, not just metadata registries."""
+"""Unified factory façade: share PR7 model registry and add optimizer creation."""
 from __future__ import annotations
 
 import torch
 
-from .models.cbow import CBOW
-from .models.skipgram import SkipGram
-from .registry import MODEL_REG, Registry
+from .models import make_model
+from .registry import Registry
 
 OPTIMIZER_REG = Registry()
-
-
-@MODEL_REG.register("cbow")
-def _cbow(**kwargs):
-    return CBOW(**kwargs)
-
-
-@MODEL_REG.register("skipgram")
-def _skipgram(**kwargs):
-    return SkipGram(**kwargs)
 
 
 @OPTIMIZER_REG.register("sgd")
@@ -30,12 +19,7 @@ def _adam(*, params, lr):
     return torch.optim.Adam(params, lr=lr)
 
 
-def make_model(name: str, *, vocab_size: int, dim: int, share_io: bool, out_vocab_size: int):
-    return MODEL_REG.create(
-        name, vocab_size=vocab_size, dim=dim,
-        share_io=share_io, out_vocab_size=out_vocab_size,
-    )
-
-
 def make_optimizer(name: str, *, params, lr: float):
+    if name not in {"sgd", "adam"}:
+        raise ValueError(f"Unsupported optimizer: {name}")
     return OPTIMIZER_REG.create(name, params=params, lr=lr)

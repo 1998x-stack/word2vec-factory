@@ -21,6 +21,7 @@ from ..data.sampler import build_unigram_sampler
 from ..data.subsample import compute_discard_probs
 from ..data.text_reader import iter_tokens
 from ..data.vocab import TokenStreamFingerprint, Vocab, build_vocab
+from ..factory import make_optimizer
 from ..losses.hierarchical_softmax import pack_hs_batch
 from ..losses.negative_sampling import draw_negatives
 from ..models import make_model
@@ -92,8 +93,10 @@ class Trainer:
             raise ValueError("window_sampling must be fixed or uniform")
         if cfg.MODEL.cbow_pooling not in {"mean", "sum"}:
             raise ValueError("cbow_pooling must be mean or sum")
-        if not 0.0 < cfg.MODEL.ns_power <= 2.0:
-            raise ValueError("ns_power must lie in (0, 2]")
+        if not np.isfinite(cfg.MODEL.ns_power) or not 0.0 < cfg.MODEL.ns_power <= 2.0:
+            raise ValueError("ns_power must be finite and lie in (0, 2]")
+        if cfg.DATA.subsample_formula not in {"legacy", "mikolov_1310"}:
+            raise ValueError("Unknown subsample formula")
         cadence = cfg.RUN.checkpoint_every_epochs
         if cadence is not None and (
             not isinstance(cadence, int) or isinstance(cadence, bool) or cadence <= 0
@@ -130,6 +133,7 @@ class Trainer:
             self.vocab.counts,
             self.vocab.total_tokens,
             cfg.DATA.subsample_t,
+            formula=cfg.DATA.subsample_formula,
         )
 
         self.hs_paths: list[list[int]] | None = None
@@ -156,12 +160,7 @@ class Trainer:
             **model_kwargs,
         ).to(self.device)
 
-        if cfg.TRAIN.optimizer == "sgd":
-            self.optim = torch.optim.SGD(self.model.parameters(), lr=cfg.TRAIN.lr)
-        elif cfg.TRAIN.optimizer == "adam":
-            self.optim = torch.optim.Adam(self.model.parameters(), lr=cfg.TRAIN.lr)
-        else:
-            raise ValueError(f"Unsupported optimizer: {cfg.TRAIN.optimizer}")
+        self.optim = make_optimizer(cfg.TRAIN.optimizer, params=self.model.parameters(), lr=cfg.TRAIN.lr)
 
         self.sched = get_scheduler(
             self.optim,

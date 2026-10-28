@@ -10,7 +10,7 @@ from dataclasses import asdict
 
 from loguru import logger
 
-from ..experiments.plan import build_plan, load_suite
+from ..experiments.paper_plan import build_plan, load_suite
 from ..experiments.runner import run_case, summarize_results, write_json
 from ..experiments.visualization import render_charts
 
